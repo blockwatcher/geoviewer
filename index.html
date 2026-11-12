@@ -241,6 +241,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
           <button class="b" data-preset="reliefh">Gel&auml;ndemodell + heute</button>
           <button class="b" data-preset="hoehen">H&ouml;henfarben (DGM1)</button>
           <button class="b" data-preset="planung">Bauleitpl&auml;ne + Grundst&uuml;cke</button>
+          <button class="b" data-preset="osm1945">1945 + Flugplatz heute (OSM)</button>
           <button class="b" data-preset="topo">Topo + Grundst&uuml;cke</button>
           <button class="b" data-preset="google">Google Satellite</button>
           <button class="b" data-preset="alle1945">Alle Ebenen 1945</button>
@@ -300,7 +301,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
         </table>
         <p class="note">Passpunkte automatisch per Bildkorrelation gegen das Luftbild 1953. Projektiv entzerrt (RANSAC). Die Mosaike liegen in UTM 33N vor und werden über ihre vier Ecken in die Web-Mercator-Karte eingepasst (Abweichung in der Bildmitte unter 0,4 m). Die amtlichen Ebenen kommen direkt von den Diensten des Landes und des BKG.</p>
       </div>
-      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25, 3D-Gebäude LoD2 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Bauleitpläne &copy; Ministerium für Inneres und Bau M-V (dl-de/by-2-0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
+      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25, 3D-Gebäude LoD2 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Bauleitpläne &copy; Ministerium für Inneres und Bau M-V (dl-de/by-2-0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Flugplatz und historische Objekte &copy; OpenStreetMap-Mitwirkende (ODbL) &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
       <div class="sec note" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">Georeferenzierung und ursprünglicher Atlas: soenke.bartling@gmail.com (<a href="https://soenkeba.github.io/Luftbildatlas_Laerz_oeffentlich/" target="_blank" rel="noopener">Original</a>). Diese Fassung: MapLibre GL JS mit 3D-Gelände.</div>
     </div>
   </aside>
@@ -515,6 +516,8 @@ const LAYERS=[
   {id:'alkis',name:'Flurstücke + Gebäude',sub:'ALKIS, live',kind:'raster',on:true,op:1,sw:'#e8d000',
    quelle:mv('alkis_wms','adv_alkis_flurstuecke,adv_alkis_gebaeude',{styles:'Gelb,Gelb',png:true,maxzoom:19,minzoom:13}),
    desc:'Amtliches Liegenschaftskataster (ALKIS): Flurstücksgrenzen und Gebäudegrundrisse, direkt vom Dienst des LAiV. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'osmflug',name:'Flugplatz + Geschichte',sub:'OpenStreetMap, Vektordaten',kind:'osm',on:false,op:1,sw:'#ff7043',
+   desc:'Aus OpenStreetMap: Start- und Landebahnen, Rollwege, Vorfelder, Flugzeugbunker (Shelter), stillgelegte Flugbetriebsflächen, Hangars, Ruinen, ausgestellte Flugzeuge, militärische Anlagen und alte Bahntrassen. Klick auf ein Objekt zeigt Bezeichnung und Angaben, benannte Objekte sind ab mittlerem Zoom beschriftet. Von Freiwilligen erfasst, nicht amtlich und unterschiedlich vollständig. Quelle: © OpenStreetMap-Mitwirkende (ODbL), tools/osm_laden.py.'},
   {id:'lod2',name:'Gebäude 3D',sub:'LoD2, nur in der 3D-Ansicht',kind:'gebaeude',on:true,op:.92,sw:'#d8d2c4',
    desc:'Amtliches 3D-Gebäudemodell (LoD2) des Landes: 605 Gebäude im Atlasgebiet, als Baukörper auf dem Gelände. MapLibre zeichnet senkrechte Prismen, die Dachform geht in der mittleren Dachhöhe auf. Klick auf ein Gebäude zeigt First- und Traufhöhe. Erscheint nur bei eingeschalteter 3D-Ansicht. Quelle: GeoBasis-DE/M-V (CC BY 4.0), tools/gebaeude_laden.py.'}
 ];
@@ -601,6 +604,28 @@ function ensure(L){
         map.addLayer({id,type:'raster',source:sid,paint:{'raster-opacity':L.op,'raster-fade-duration':0}},OBEN);
         L._da=true;L._kommt=false;applyLayer(L);syncOrder();
       }).catch(e=>{L._kommt=false;toast(e.message)});
+    }else if(L.kind==='osm'){
+      map.addSource(sid,{type:'geojson',data:'osm/flugplatz.geojson',attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende'});
+      const farbe=['match',['get','kat'],...Object.entries(OSM_FARBE).flat(),'#ffffff'],still=['in',['get','kat'],['literal',['still_linie','still_flaeche','bahntrasse','platz']]];
+      // Zoom-Ausdrücke müssen außen stehen, darum die Unterscheidung Bahn/Rollweg innerhalb der Stützstellen
+      const z=(a,b)=>['interpolate',['exponential',1.6],['zoom'],12,a,18,b],zb=(a,b,c,d)=>z(['match',['get','kat'],'bahn',a,c],['match',['get','kat'],'bahn',b,d]);
+      map.addLayer({id:'osm-flaeche',type:'fill',source:sid,filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':farbe,'fill-opacity':['match',['get','kat'],'still_flaeche',.18,'vorfeld',.22,.5]}},OBEN);
+      map.addLayer({id:'osm-rand',type:'line',source:sid,filter:['==',['geometry-type'],'Polygon'],paint:{'line-color':farbe,'line-width':z(.8,2.2)}},OBEN);
+      map.addLayer({id:'osm-linie-rand',type:'line',source:sid,filter:['all',['==',['geometry-type'],'LineString'],['!',still]],layout:{'line-cap':'round','line-join':'round'},
+        paint:{'line-color':'#000','line-opacity':.55,'line-width':zb(4,26,2.4,9)}},OBEN);
+      map.addLayer({id:'osm-linie',type:'line',source:sid,filter:['all',['==',['geometry-type'],'LineString'],['!',still]],layout:{'line-cap':'round','line-join':'round'},
+        paint:{'line-color':farbe,'line-width':zb(2.6,20,1.2,6)}},OBEN);
+      map.addLayer({id:'osm-still',type:'line',source:sid,filter:['all',['==',['geometry-type'],'LineString'],still],
+        paint:{'line-color':farbe,'line-width':z(1.2,4),'line-dasharray':[2.5,2]}},OBEN);
+      map.addLayer({id:'osm-punkt',type:'circle',source:sid,filter:['==',['geometry-type'],'Point'],
+        paint:{'circle-color':farbe,'circle-radius':z(3,8),'circle-stroke-color':'#000','circle-stroke-width':1.2}},OBEN);
+      L._ids=['osm-flaeche','osm-rand','osm-linie-rand','osm-linie','osm-still','osm-punkt'];L._da=true;
+      for(const k of['osm-flaeche','osm-linie','osm-still','osm-punkt']){
+        map.on('click',k,osmKlick);
+        map.on('mouseenter',k,()=>{if(tool==='pan'&&!dragLayer)map.getCanvas().style.cursor='pointer'});
+        map.on('mouseleave',k,()=>{map.getCanvas().style.cursor=''});
+      }
+      fetch('osm/flugplatz.geojson').then(r=>r.json()).then(d=>{L._namen=d.features.filter(f=>(f.properties.name||f.properties.ref)&&f.properties.kat!=='rollweg'&&f.properties.kat!=='still_linie');osmNamen()}).catch(()=>{});
     }else if(L.kind==='gebaeude'){
       map.addSource(sid,{type:'geojson',data:'gebaeude/lod2.geojson',attribution:MV+' (LoD2)'});
       map.addLayer({id,type:'fill-extrusion',source:sid,minzoom:12,paint:{'fill-extrusion-color':['interpolate',['linear'],['get','h'],2,'#e6e0d2',8,'#d2c9b6',20,'#b9ad96'],
@@ -624,6 +649,30 @@ function ensure(L){
 const OP={raster:'raster-opacity',bild:'raster-opacity',frame:'raster-opacity',hill:'hillshade-exaggeration',relief:'color-relief-opacity',gebaeude:'fill-extrusion-opacity'};
 // ALKIS-Gebäudefunktionen, soweit im Gebiet häufig
 const FKT={'31001_1010':'Wohnhaus','31001_2000':'Gebäude für Wirtschaft oder Gewerbe','31001_2463':'Garage','31001_2721':'Scheune','31001_2723':'Schuppen','31001_2724':'Stall','31001_3041':'Kirche'};
+const OSM_FARBE={bahn:'#f5f5f5',rollweg:'#ffd54f',vorfeld:'#ffd54f',shelter:'#ff7043',gebaeude:'#4fc3f7',still_linie:'#b0bec5',still_flaeche:'#b0bec5',
+  historisch:'#e040fb',militaer:'#ef5350',bahntrasse:'#a1887f',platz:'#80deea',punkt:'#ffffff'};
+const OSM_FELDER=[['description','Beschreibung'],['bunker_type','Bunkertyp'],['ref','Kennung'],['surface','Belag'],['width','Breite (m)'],['length','Länge (m)'],
+  ['start_date','Seit'],['end_date','Bis'],['aircraft_type','Flugzeugtyp'],['model','Modell'],['operator','Betreiber'],['access','Zugang'],['inscription','Inschrift']];
+function osmKlick(e){
+  if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
+  const p=e.features[0].properties;e.preventDefault();
+  const zeilen=OSM_FELDER.filter(([k])=>p[k]).map(([k,n])=>`${n}: ${esc(p[k])}`);
+  zeigePopup(e.lngLat,`<b>${esc(p.name||p.art)}</b>${p.name?'<br>'+esc(p.art):''}${zeilen.length?'<br>'+zeilen.join('<br>'):''}`
+    +(/^(node|way|relation)\/\d+$/.test(p.osm)?`<br><a href="https://www.openstreetmap.org/${p.osm}" target="_blank" rel="noopener">Objekt in OpenStreetMap</a>`:''));
+}
+// Namen als Beschriftung: MapLibre bräuchte dafür einen Schriften-Server, darum als Marker wie bei den Messungen
+let osmMarken=[];
+function osmNamen(){
+  const L=LAYERS.find(x=>x.kind==='osm');osmMarken.forEach(m=>m.remove());osmMarken=[];
+  if(!L||!L.on||!L._namen||map.getZoom()<14.2)return;
+  for(const f of L._namen){
+    const g=f.geometry,k=g.type==='Point'?[g.coordinates]:g.type==='LineString'?g.coordinates:g.coordinates[0];
+    const lon=k.reduce((s,c)=>s+c[0],0)/k.length,lat=k.reduce((s,c)=>s+c[1],0)/k.length;
+    const el=document.createElement('div');el.className='lbl';el.style.color=OSM_FARBE[f.properties.kat]||'#fff';el.textContent=f.properties.name||f.properties.ref;
+    osmMarken.push(new maplibregl.Marker({element:el,anchor:'bottom',offset:[0,-6]}).setLngLat([lon,lat]).addTo(map));
+  }
+}
+map.on('zoomend',osmNamen);
 let infoPopup=null;
 function zeigePopup(lngLat,html){infoPopup?.remove();infoPopup=new maplibregl.Popup({closeButton:false,maxWidth:'280px'}).setLngLat(lngLat).setHTML(html).addTo(map)}
 function gebaeudeKlick(e){
@@ -636,6 +685,16 @@ function applyLayer(L){
   if(!bereit)return;
   if(L.on)ensure(L);
   if(!L._da)return;
+  if(L._ids){
+    for(const id of L._ids){
+      if(map.getLayer(id))map.setLayoutProperty(id,'visibility',L.on?'visible':'none');
+      const art=map.getLayer(id)?.type;if(!art)continue;
+      if(art==='line')map.setPaintProperty(id,'line-opacity',(id==='osm-linie-rand'?.55:1)*L.op);
+      else if(art==='circle'){map.setPaintProperty(id,'circle-opacity',L.op);map.setPaintProperty(id,'circle-stroke-opacity',L.op)}
+      else map.setPaintProperty(id,'fill-opacity',['*',L.op,['match',['get','kat'],'still_flaeche',.18,'vorfeld',.22,.5]]);
+    }
+    osmNamen();return;
+  }
   map.setLayoutProperty(L.id,'visibility',L.on&&!(hHeld&&L.kind==='frame'&&!L.privat)&&(L.kind!=='gebaeude'||d3)?'visible':'none');
   map.setPaintProperty(L.id,OP[L.kind],L.op);
   if(L.kind==='gebaeude')map.setPaintProperty(L.id,'fill-extrusion-height',['*',['get','h'],exag]);
@@ -643,7 +702,7 @@ function applyLayer(L){
 }
 function syncOrder(){
   if(!bereit)return;
-  LAYERS.forEach(L=>{if(L._da)map.moveLayer(L.id,OBEN)});
+  LAYERS.forEach(L=>{if(L._da)(L._ids||[L.id]).forEach(id=>map.moveLayer(id,OBEN))});
 }
 
 // ── Panel: Ebenen-Liste ───────────────────────────────────────────────
@@ -962,7 +1021,7 @@ let planLauf=0;
 map.on('click',async e=>{
   if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
   const ebenen=LAYERS.filter(L=>L.plan&&L.on).map(L=>L.plan);if(!ebenen.length)return;
-  if(map.queryRenderedFeatures(e.point,{layers:['flug-klick',...(map.getLayer('lod2')?['lod2']:[])]}).length)return;      // Flugspur und Gebäude haben Vorrang
+  if(map.queryRenderedFeatures(e.point,{layers:['flug-klick','lod2','osm-flaeche','osm-linie','osm-still','osm-punkt'].filter(id=>map.getLayer(id))}).length)return;      // Flugspur und Gebäude haben Vorrang
   const lauf=++planLauf,R=20037508.342789244,x=e.lngLat.lng*R/180,y=Math.log(Math.tan((90+e.lngLat.lat)*Math.PI/360))*R/Math.PI;
   const m=40075016.686/(512*2**map.getZoom())*50;                                     // 50 Bildschirmpixel in Mercator-Metern
   const q=new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:ebenen.join(','),QUERY_LAYERS:ebenen.join(','),STYLES:'',
@@ -1025,6 +1084,7 @@ const PRE={
  'heute':   {...allOff,heute:[1,1],alkis:[1,1]},
  'topo':    {...allOff,topo:[1,1],alkis:[1,.6]},
  'planung': {...allOff,heute:[1,1],fplan:[1,.35],bplan:[1,.7],alkis:[1,.6]},
+ 'osm1945': {...f45,heute:[1,1],osmflug:[1,.9]},
  'google':  {...allOff,google:[1,1],alkis:[1,.7]},
  '1945':    {...f45,heute:[1,1]},
  '1945alk': {...f45,heute:[1,1],alkis:[1,.8]},

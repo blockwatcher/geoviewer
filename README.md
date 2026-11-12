@@ -44,6 +44,16 @@ python tools/gebaeude_laden.py                 # LoD2-Gebäude des Landes für d
   dl-de/by-2-0). Gezeigt werden die Geltungsbereiche; ein Klick fragt Plan, Rechtsstand und den Link zu den
   Unterlagen ab. Der Bestand im Portal ist nicht vollständig.
 
+## Flugplatz und Geschichte aus OpenStreetMap
+
+```bash
+python tools/osm_laden.py                      # einmalige Abfrage, schreibt osm/flugplatz.geojson
+```
+
+Bahnen, Rollwege, Vorfelder, Flugzeugbunker (auch stillgelegte), Hangars, Ruinen, ausgestellte Flugzeuge,
+militärische Anlagen und alte Bahntrassen als Vektorebene mit Klick-Auskunft und Beschriftung.
+Daten: © OpenStreetMap-Mitwirkende, ODbL 1.0 – von Freiwilligen erfasst, nicht amtlich.
+
 ## Flugspuren (ADS-B)
 
 ```bash
