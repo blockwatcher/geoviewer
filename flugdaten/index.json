@@ -13,6 +13,30 @@
    "datei": "2026-08-02.json"
   },
   {
+   "datum": "2026-08-08",
+   "fluege": 14,
+   "flugzeuge": 14,
+   "datei": "2026-08-08.json"
+  },
+  {
+   "datum": "2026-08-09",
+   "fluege": 12,
+   "flugzeuge": 12,
+   "datei": "2026-08-09.json"
+  },
+  {
+   "datum": "2026-08-15",
+   "fluege": 18,
+   "flugzeuge": 18,
+   "datei": "2026-08-15.json"
+  },
+  {
+   "datum": "2026-08-16",
+   "fluege": 14,
+   "flugzeuge": 14,
+   "datei": "2026-08-16.json"
+  },
+  {
    "datum": "2026-11-07",
    "fluege": 11,
    "flugzeuge": 11,
