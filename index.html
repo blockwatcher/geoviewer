@@ -241,6 +241,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
           <button class="b" data-preset="reliefh">Gel&auml;ndemodell + heute</button>
           <button class="b" data-preset="hoehen">H&ouml;henfarben (DGM1)</button>
           <button class="b" data-preset="planung">Bauleitpl&auml;ne + Grundst&uuml;cke</button>
+          <button class="b" data-preset="schutz">Schutzgebiete</button>
           <button class="b" data-preset="osm1945">1945 + Flugplatz heute (OSM)</button>
           <button class="b" data-preset="topo">Topo + Grundst&uuml;cke</button>
           <button class="b" data-preset="google">Google Satellite</button>
@@ -301,7 +302,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
         </table>
         <p class="note">Passpunkte automatisch per Bildkorrelation gegen das Luftbild 1953. Projektiv entzerrt (RANSAC). Die Mosaike liegen in UTM 33N vor und werden über ihre vier Ecken in die Web-Mercator-Karte eingepasst (Abweichung in der Bildmitte unter 0,4 m). Die amtlichen Ebenen kommen direkt von den Diensten des Landes und des BKG.</p>
       </div>
-      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25, 3D-Gebäude LoD2 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Bauleitpläne &copy; Ministerium für Inneres und Bau M-V (dl-de/by-2-0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Flugplatz und historische Objekte &copy; OpenStreetMap-Mitwirkende (ODbL) &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
+      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25, 3D-Gebäude LoD2 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Bauleitpläne &copy; Ministerium für Inneres und Bau M-V (dl-de/by-2-0) &middot; Schutzgebiete &copy; LUNG M-V (CC BY-SA) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Flugplatz und historische Objekte &copy; OpenStreetMap-Mitwirkende (ODbL) &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
       <div class="sec note" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">Georeferenzierung und ursprünglicher Atlas: soenke.bartling@gmail.com (<a href="https://soenkeba.github.io/Luftbildatlas_Laerz_oeffentlich/" target="_blank" rel="noopener">Original</a>). Diese Fassung: MapLibre GL JS mit 3D-Gelände.</div>
     </div>
   </aside>
@@ -442,6 +443,10 @@ maplibregl.addProtocol('mvwms',async(params,abort)=>{
 });
 const MV='© <a href="https://www.laiv-mv.de/" target="_blank" rel="noopener">GeoBasis-DE/M-V</a>',BKG='© <a href="https://www.bkg.bund.de/" target="_blank" rel="noopener">BKG</a>';
 const PLAN='© <a href="https://bplan.geodaten-mv.de/" target="_blank" rel="noopener">Bau- und Planungsportal M-V</a> (dl-de/by-2-0)';
+const PLAN_URL='https://www.geodaten-mv.de/dienste/bauleitplan_wms',SCHUTZ_URL='https://umweltkarten.lung-mv.de/dienste/ng_schutzgebiete';
+// Schutzkategorien des LUNG-Dienstes, von unten nach oben gezeichnet
+const SCHUTZ_ART={np_f:'Naturpark',lsg_f:'Landschaftsschutzgebiet',spamv_f:'Europäisches Vogelschutzgebiet',ffhmv_f:'FFH-Gebiet',nlp_f:'Nationalpark',
+  brn_f:'Biosphärenreservat',nsg_f:'Naturschutzgebiet',wildnisg_f:'Wildnisgebiet',fnd_f:'Flächennaturdenkmal',nnm_f:'Nationales Naturmonument'};
 const mv=(svc,layers,o={})=>({type:'raster',tileSize:512,minzoom:o.minzoom??8,maxzoom:o.maxzoom??18,attribution:o.attribution||MV,
   tiles:[`mvwms://${svc}?LAYERS=${layers}&STYLES=${o.styles||''}&FORMAT=${o.png?'image/png&TRANSPARENT=TRUE':'image/jpeg'}&px=512&BBOX={bbox-epsg-3857}`]});
 const s2=jahr=>({type:'raster',tileSize:256,maxzoom:14,attribution:BKG+' (Sentinel-2)',
@@ -507,6 +512,10 @@ const LAYERS=[
    desc:'Höhenschichten direkt aus den Höhenwerten des DGM1, Farbskala auf das Gebiet abgestimmt (blau = tief, grün, gelb, rot = hoch). Macht im flachen Gelände Dämme, Gräben und Senken sichtbar. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
   {id:'dgm',name:'Geländemodell',sub:'DGM1 Schummerung, in MapLibre gerechnet',kind:'hill',on:false,op:.7,sw:'#4e342e',
    desc:'Schummerung, die MapLibre aus den Höhenwerten des DGM1 (Laserscanning, 1 m Raster) selbst rechnet. Der Regler steuert die Stärke. Dieselben Höhendaten tragen die 3D-Ansicht. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'schutz',name:'Schutzgebiete',sub:'Naturschutz, LUNG M-V',kind:'raster',on:false,op:.55,sw:'#7cb342',schutz:Object.keys(SCHUTZ_ART),
+   quelle:{type:'raster',tileSize:512,minzoom:8,maxzoom:18,attribution:'© <a href="https://www.lung.mv-regierung.de/" target="_blank" rel="noopener">LUNG M-V</a> (CC BY-SA)',
+     tiles:[`${SCHUTZ_URL}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${Object.keys(SCHUTZ_ART).join(',')}&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=512&HEIGHT=512&FORMAT=image/png&TRANSPARENT=TRUE`]},
+   desc:'Schutzgebiete nach Naturschutzrecht vom Landesamt für Umwelt, Naturschutz und Geologie: Landschafts- und Naturschutzgebiete, FFH- und Europäische Vogelschutzgebiete, Nationalpark (Müritz), Naturparke, Wildnisgebiete, Flächennaturdenkmale. Der Flugplatz selbst liegt weitgehend außerhalb, die Gebiete schließen ringsum an. Klick in die Karte nennt Gebiet, Kategorie, Jahr und Fläche. Quelle: LUNG M-V (CC BY-SA).'},
   {id:'fplan',name:'Flächennutzungspläne',sub:'Bauleitpläne M-V, Geltungsbereiche',kind:'raster',on:false,op:.45,sw:'#d9d36a',plan:'F_Plan',
    quelle:mv('bauleitplan_wms','F_Plan',{png:true,maxzoom:18,attribution:PLAN}),
    desc:'Geltungsbereiche der Flächennutzungspläne aus dem Bau- und Planungsportal M-V. Gezeigt wird der Umriss, nicht die Planzeichnung. Klick in die Karte nennt Plan, Rechtsstand und den Link zum Portal. Der Bestand im Portal ist nicht vollständig. Quelle: Ministerium für Inneres und Bau M-V (dl-de/by-2-0).'},
@@ -1007,33 +1016,52 @@ map.on('click',e=>{
 });
 map.on('dblclick',e=>{if(tool==='measure'&&curMeasure.length>=2){e.preventDefault();finishMeasure()}});
 
-// ── Bauleitpläne: Auskunft per Klick (WMS GetFeatureInfo) ─────────────
-function planText(txt){
-  // Antwort als text/plain: "Layer 'B_Plan'", darunter je "Feature n:" eine Liste  name = 'wert'
-  const out=[];let akt=null;
+// ── Auskunft per Klick: Bauleitpläne und Schutzgebiete (WMS GetFeatureInfo) ──
+function infoText(txt){
+  // Antwort als text/plain: "Layer 'x'", darunter je "Feature n" eine Liste  name = 'wert'
+  const out=[];let akt=null,ebene='';
   for(const z of txt.split(/\r?\n/)){
-    if(/^\s*Feature \d+:/.test(z)){akt={};out.push(akt);continue}
-    const m=z.match(/^\s+(\w+) = '(.*)'\s*$/);if(m&&akt)akt[m[1]]=m[2];
+    const l=z.match(/^\s*Layer '(.+)'\s*$/);if(l){ebene=l[1];continue}
+    if(/^\s*Feature \d+:?\s*$/.test(z)){akt={_ebene:ebene};out.push(akt);continue}
+    const m=z.match(/^\s*(.+?) = '(.*)'\s*$/);if(m&&akt)akt[m[1]]=m[2];
   }
   return out;
 }
-let planLauf=0;
-map.on('click',async e=>{
-  if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
-  const ebenen=LAYERS.filter(L=>L.plan&&L.on).map(L=>L.plan);if(!ebenen.length)return;
-  if(map.queryRenderedFeatures(e.point,{layers:['flug-klick','lod2','osm-flaeche','osm-linie','osm-still','osm-punkt'].filter(id=>map.getLayer(id))}).length)return;      // Flugspur und Gebäude haben Vorrang
-  const lauf=++planLauf,R=20037508.342789244,x=e.lngLat.lng*R/180,y=Math.log(Math.tan((90+e.lngLat.lat)*Math.PI/360))*R/Math.PI;
+async function infoAbruf(url,ebenen,lngLat){
+  const R=20037508.342789244,x=lngLat.lng*R/180,y=Math.log(Math.tan((90+lngLat.lat)*Math.PI/360))*R/Math.PI;
   const m=40075016.686/(512*2**map.getZoom())*50;                                     // 50 Bildschirmpixel in Mercator-Metern
   const q=new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:ebenen.join(','),QUERY_LAYERS:ebenen.join(','),STYLES:'',
     CRS:'EPSG:3857',BBOX:[x-m,y-m,x+m,y+m].join(','),WIDTH:101,HEIGHT:101,I:50,J:50,INFO_FORMAT:'text/plain',FEATURE_COUNT:8});
-  let plaene=[];
-  try{const r=await fetch('https://www.geodaten-mv.de/dienste/bauleitplan_wms?'+q);if(!r.ok)throw 0;plaene=planText(await r.text())}catch(err){if(lauf===planLauf)toast('Planauskunft nicht erreichbar');return}
-  if(lauf!==planLauf||!plaene.length)return;
-  const sicher=u=>/^https:\/\/(www\.)?bauportal-mv\.de\//.test(u||'')?u:null;
-  zeigePopup(e.lngLat,plaene.map(p=>{
-    const gem=(()=>{try{return JSON.parse(p.gemeinde||'[]').map(g=>g.gemeindename).filter(Boolean).join(', ')}catch(err){return''}})(),link=sicher(p.link);
-    return`<b>${esc(p.anzeigename||p.planart_text||'Plan')}</b><br>${esc([gem,p.rechtsstand_text,p.verfahren_text&&'Verfahren '+p.verfahren_text].filter(Boolean).join(' · '))}${link?`<br><a href="${esc(link)}" target="_blank" rel="noopener">Unterlagen im Bau- und Planungsportal</a>`:''}`;
-  }).join('<hr style="border:0;border-top:1px solid #ccc;margin:6px 0">'));
+  const r=await fetch(url+'?'+q);if(!r.ok)throw new Error('HTTP '+r.status);
+  return infoText(await r.text());
+}
+function planHtml(p){
+  const gem=(()=>{try{return JSON.parse(p.gemeinde||'[]').map(g=>g.gemeindename).filter(Boolean).join(', ')}catch(err){return''}})();
+  const link=/^https:\/\/(www\.)?bauportal-mv\.de\//.test(p.link||'')?p.link:null;
+  return`<b>${esc(p.anzeigename||p.planart_text||'Plan')}</b><br>${esc([gem,p.rechtsstand_text,p.verfahren_text&&'Verfahren '+p.verfahren_text].filter(Boolean).join(' · '))}${link?`<br><a href="${esc(link)}" target="_blank" rel="noopener">Unterlagen im Bau- und Planungsportal</a>`:''}`;
+}
+function schutzHtml(p){
+  // Die Feldnamen des Dienstes sind ausgeschrieben und je Kategorie verschieden, darum nach Anfängen suchen
+  const k=Object.keys(p),w=re=>{const f=k.find(x=>re.test(x));return f?p[f]:''};
+  const art=SCHUTZ_ART[p._ebene]||'Schutzgebiet',ha=parseFloat(w(/laut Geodaten/)),jahr=w(/^Jahr der erstmaligen/),recht=w(/^Internetlink/);
+  const link=/^https?:\/\/(www\.)?landesrecht-mv\.de\//.test(recht)?recht:null;
+  const z=[w(/kennziffer/i),jahr&&'seit '+jahr,Number.isFinite(ha)&&Math.round(ha).toLocaleString('de-DE')+' ha'].filter(Boolean);
+  return`<b>${esc(w(/^Name/)||art)}</b><br>${esc(art)}${z.length?'<br>'+esc(z.join(' · ')):''}${link?`<br><a href="${esc(link)}" target="_blank" rel="noopener">Rechtsgrundlage</a>`:''}`;
+}
+let infoLauf=0;
+map.on('click',async e=>{
+  if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
+  const plan=LAYERS.filter(L=>L.plan&&L.on).map(L=>L.plan),schutz=LAYERS.filter(L=>L.schutz&&L.on).flatMap(L=>L.schutz);
+  if(!plan.length&&!schutz.length)return;
+  // Flugspur, Gebäude und OSM-Objekte haben Vorrang
+  if(map.queryRenderedFeatures(e.point,{layers:['flug-klick','lod2','osm-flaeche','osm-linie','osm-still','osm-punkt'].filter(id=>map.getLayer(id))}).length)return;
+  const lauf=++infoLauf;let fehler=false,a=[],b=[];
+  await Promise.all([
+    plan.length?infoAbruf(PLAN_URL,plan,e.lngLat).then(r=>{a=r.map(planHtml)}).catch(()=>{fehler=true}):0,
+    schutz.length?infoAbruf(SCHUTZ_URL,schutz,e.lngLat).then(r=>{b=r.map(schutzHtml)}).catch(()=>{fehler=true}):0]);
+  if(lauf!==infoLauf)return;
+  if(!a.length&&!b.length){if(fehler)toast('Auskunft nicht erreichbar');return}
+  zeigePopup(e.lngLat,[...a,...b].join('<hr style="border:0;border-top:1px solid #ccc;margin:6px 0">'));
 });
 
 let labels=[];
@@ -1084,6 +1112,7 @@ const PRE={
  'heute':   {...allOff,heute:[1,1],alkis:[1,1]},
  'topo':    {...allOff,topo:[1,1],alkis:[1,.6]},
  'planung': {...allOff,heute:[1,1],fplan:[1,.35],bplan:[1,.7],alkis:[1,.6]},
+ 'schutz':  {...allOff,heute:[1,1],schutz:[1,.55],alkis:[1,.4]},
  'osm1945': {...f45,heute:[1,1],osmflug:[1,.9]},
  'google':  {...allOff,google:[1,1],alkis:[1,.7]},
  '1945':    {...f45,heute:[1,1]},
