@@ -37,6 +37,12 @@
    "datei": "2026-08-16.json"
   },
   {
+   "datum": "2026-08-22",
+   "fluege": 23,
+   "flugzeuge": 23,
+   "datei": "2026-08-22.json"
+  },
+  {
    "datum": "2026-11-07",
    "fluege": 11,
    "flugzeuge": 11,

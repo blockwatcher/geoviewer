@@ -31,6 +31,19 @@ Benötigt `numpy`, `rasterio`, `scipy`, `Pillow`.
 Alle amtlichen Ebenen (DOP, DOP 1953/1991, ALKIS, TK25, DTK25, Schummerung, TopPlusOpen, basemap.de,
 Sentinel-2) kommen live von den Diensten des Landes M-V und des BKG.
 
+## 3D-Gebäude und Bauleitpläne
+
+```bash
+python tools/gebaeude_laden.py                 # LoD2-Gebäude des Landes für das Atlasgebiet
+```
+
+- **Gebäude 3D:** `gebaeude/lod2.geojson` aus dem Downloaddienst 3D-Gebäudedaten MV (CityGML, Kacheln 2 x 2 km).
+  Die Karte zeigt sie in der 3D-Ansicht als Baukörper mit mittlerer Dachhöhe; MapLibre kennt nur senkrechte
+  Prismen, Dachformen werden nicht dargestellt. Klick zeigt First- und Traufhöhe.
+- **Bebauungs- und Flächennutzungspläne:** live vom Dienst `bauleitplan_wms` (Bau- und Planungsportal M-V,
+  dl-de/by-2-0). Gezeigt werden die Geltungsbereiche; ein Klick fragt Plan, Rechtsstand und den Link zu den
+  Unterlagen ab. Der Bestand im Portal ist nicht vollständig.
+
 ## Flugspuren (ADS-B)
 
 ```bash

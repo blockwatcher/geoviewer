@@ -240,6 +240,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
           <button class="b" data-preset="relief">Gel&auml;ndemodell + 1945</button>
           <button class="b" data-preset="reliefh">Gel&auml;ndemodell + heute</button>
           <button class="b" data-preset="hoehen">H&ouml;henfarben (DGM1)</button>
+          <button class="b" data-preset="planung">Bauleitpl&auml;ne + Grundst&uuml;cke</button>
           <button class="b" data-preset="topo">Topo + Grundst&uuml;cke</button>
           <button class="b" data-preset="google">Google Satellite</button>
           <button class="b" data-preset="alle1945">Alle Ebenen 1945</button>
@@ -299,7 +300,7 @@ table.q td:first-child,table.q th:first-child{text-align:left}
         </table>
         <p class="note">Passpunkte automatisch per Bildkorrelation gegen das Luftbild 1953. Projektiv entzerrt (RANSAC). Die Mosaike liegen in UTM 33N vor und werden über ihre vier Ecken in die Web-Mercator-Karte eingepasst (Abweichung in der Bildmitte unter 0,4 m). Die amtlichen Ebenen kommen direkt von den Diensten des Landes und des BKG.</p>
       </div>
-      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
+      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25, 3D-Gebäude LoD2 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Bauleitpläne &copy; Ministerium für Inneres und Bau M-V (dl-de/by-2-0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
       <div class="sec note" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">Georeferenzierung und ursprünglicher Atlas: soenke.bartling@gmail.com (<a href="https://soenkeba.github.io/Luftbildatlas_Laerz_oeffentlich/" target="_blank" rel="noopener">Original</a>). Diese Fassung: MapLibre GL JS mit 3D-Gelände.</div>
     </div>
   </aside>
@@ -439,7 +440,8 @@ maplibregl.addProtocol('mvwms',async(params,abort)=>{
   return{data:await createImageBitmap(blob,WMS_RAND,WMS_RAND,px,px)};
 });
 const MV='© <a href="https://www.laiv-mv.de/" target="_blank" rel="noopener">GeoBasis-DE/M-V</a>',BKG='© <a href="https://www.bkg.bund.de/" target="_blank" rel="noopener">BKG</a>';
-const mv=(svc,layers,o={})=>({type:'raster',tileSize:512,minzoom:o.minzoom??8,maxzoom:o.maxzoom??18,attribution:MV,
+const PLAN='© <a href="https://bplan.geodaten-mv.de/" target="_blank" rel="noopener">Bau- und Planungsportal M-V</a> (dl-de/by-2-0)';
+const mv=(svc,layers,o={})=>({type:'raster',tileSize:512,minzoom:o.minzoom??8,maxzoom:o.maxzoom??18,attribution:o.attribution||MV,
   tiles:[`mvwms://${svc}?LAYERS=${layers}&STYLES=${o.styles||''}&FORMAT=${o.png?'image/png&TRANSPARENT=TRUE':'image/jpeg'}&px=512&BBOX={bbox-epsg-3857}`]});
 const s2=jahr=>({type:'raster',tileSize:256,maxzoom:14,attribution:BKG+' (Sentinel-2)',
   tiles:[`https://sgx.geodatenzentrum.de/wms_sentinel2_de?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=rgb&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/jpeg&TIME=${jahr}-01-01T00:00:00Z`]});
@@ -504,9 +506,17 @@ const LAYERS=[
    desc:'Höhenschichten direkt aus den Höhenwerten des DGM1, Farbskala auf das Gebiet abgestimmt (blau = tief, grün, gelb, rot = hoch). Macht im flachen Gelände Dämme, Gräben und Senken sichtbar. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
   {id:'dgm',name:'Geländemodell',sub:'DGM1 Schummerung, in MapLibre gerechnet',kind:'hill',on:false,op:.7,sw:'#4e342e',
    desc:'Schummerung, die MapLibre aus den Höhenwerten des DGM1 (Laserscanning, 1 m Raster) selbst rechnet. Der Regler steuert die Stärke. Dieselben Höhendaten tragen die 3D-Ansicht. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'fplan',name:'Flächennutzungspläne',sub:'Bauleitpläne M-V, Geltungsbereiche',kind:'raster',on:false,op:.45,sw:'#d9d36a',plan:'F_Plan',
+   quelle:mv('bauleitplan_wms','F_Plan',{png:true,maxzoom:18,attribution:PLAN}),
+   desc:'Geltungsbereiche der Flächennutzungspläne aus dem Bau- und Planungsportal M-V. Gezeigt wird der Umriss, nicht die Planzeichnung. Klick in die Karte nennt Plan, Rechtsstand und den Link zum Portal. Der Bestand im Portal ist nicht vollständig. Quelle: Ministerium für Inneres und Bau M-V (dl-de/by-2-0).'},
+  {id:'bplan',name:'Bebauungspläne',sub:'Bauleitpläne M-V, Geltungsbereiche',kind:'raster',on:false,op:.7,sw:'#3ddc84',plan:'B_Plan',
+   quelle:mv('bauleitplan_wms','B_Plan',{png:true,maxzoom:19,attribution:PLAN}),
+   desc:'Geltungsbereiche der Bebauungspläne aus dem Bau- und Planungsportal M-V. Gezeigt wird der Umriss, nicht die Planzeichnung. Klick in die Karte nennt Plan, Rechtsstand und den Link zum Portal mit den Planunterlagen. Der Bestand im Portal ist nicht vollständig. Quelle: Ministerium für Inneres und Bau M-V (dl-de/by-2-0).'},
   {id:'alkis',name:'Flurstücke + Gebäude',sub:'ALKIS, live',kind:'raster',on:true,op:1,sw:'#e8d000',
    quelle:mv('alkis_wms','adv_alkis_flurstuecke,adv_alkis_gebaeude',{styles:'Gelb,Gelb',png:true,maxzoom:19,minzoom:13}),
-   desc:'Amtliches Liegenschaftskataster (ALKIS): Flurstücksgrenzen und Gebäudegrundrisse, direkt vom Dienst des LAiV. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'}
+   desc:'Amtliches Liegenschaftskataster (ALKIS): Flurstücksgrenzen und Gebäudegrundrisse, direkt vom Dienst des LAiV. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'lod2',name:'Gebäude 3D',sub:'LoD2, nur in der 3D-Ansicht',kind:'gebaeude',on:true,op:.92,sw:'#d8d2c4',
+   desc:'Amtliches 3D-Gebäudemodell (LoD2) des Landes: 605 Gebäude im Atlasgebiet, als Baukörper auf dem Gelände. MapLibre zeichnet senkrechte Prismen, die Dachform geht in der mittleren Dachhöhe auf. Klick auf ein Gebäude zeigt First- und Traufhöhe. Erscheint nur bei eingeschalteter 3D-Ansicht. Quelle: GeoBasis-DE/M-V (CC BY 4.0), tools/gebaeude_laden.py.'}
 ];
 function restoreState(L){const s=store[L.id];if(s){L.on=s.on??L.on;L.op=s.op??L.op;L.a=s.a}L.a=L.a||{dx:0,dy:0,rot:0,sc:100};
   if(L.kind==='frame'&&!L.f)L.f=D.frames[L.id]}
@@ -591,6 +601,11 @@ function ensure(L){
         map.addLayer({id,type:'raster',source:sid,paint:{'raster-opacity':L.op,'raster-fade-duration':0}},OBEN);
         L._da=true;L._kommt=false;applyLayer(L);syncOrder();
       }).catch(e=>{L._kommt=false;toast(e.message)});
+    }else if(L.kind==='gebaeude'){
+      map.addSource(sid,{type:'geojson',data:'gebaeude/lod2.geojson',attribution:MV+' (LoD2)'});
+      map.addLayer({id,type:'fill-extrusion',source:sid,minzoom:12,paint:{'fill-extrusion-color':['interpolate',['linear'],['get','h'],2,'#e6e0d2',8,'#d2c9b6',20,'#b9ad96'],
+        'fill-extrusion-base':0,'fill-extrusion-height':['*',['get','h'],exag],'fill-extrusion-opacity':L.op}},OBEN);L._da=true;
+      map.on('click',id,gebaeudeKlick);
     }else if(L.kind==='hill'){
       map.addSource(sid,dem());
       map.addLayer({id,type:'hillshade',source:sid,paint:{'hillshade-exaggeration':L.op,'hillshade-method':'multidirectional',
@@ -606,13 +621,24 @@ function ensure(L){
   }catch(e){console.error(e);toast('Ebene '+L.name+': '+e.message)}
   if(L._da)syncOrder();
 }
-const OP={raster:'raster-opacity',bild:'raster-opacity',frame:'raster-opacity',hill:'hillshade-exaggeration',relief:'color-relief-opacity'};
+const OP={raster:'raster-opacity',bild:'raster-opacity',frame:'raster-opacity',hill:'hillshade-exaggeration',relief:'color-relief-opacity',gebaeude:'fill-extrusion-opacity'};
+// ALKIS-Gebäudefunktionen, soweit im Gebiet häufig
+const FKT={'31001_1010':'Wohnhaus','31001_2000':'Gebäude für Wirtschaft oder Gewerbe','31001_2463':'Garage','31001_2721':'Scheune','31001_2723':'Schuppen','31001_2724':'Stall','31001_3041':'Kirche'};
+let infoPopup=null;
+function zeigePopup(lngLat,html){infoPopup?.remove();infoPopup=new maplibregl.Popup({closeButton:false,maxWidth:'280px'}).setLngLat(lngLat).setHTML(html).addTo(map)}
+function gebaeudeKlick(e){
+  if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
+  const p=e.features[0].properties,z=v=>Number(v).toFixed(1).replace('.',',');
+  e.preventDefault();
+  zeigePopup(e.lngLat,`<b>${esc(FKT[p.fkt]||'Gebäude')}</b><br>First ${z(p.first)} m · Traufe ${z(p.traufe)} m über Grund<br>Gelände ${z(p.boden)} m NHN${FKT[p.fkt]?'':'<br>Funktion '+esc(p.fkt)}`);
+}
 function applyLayer(L){
   if(!bereit)return;
   if(L.on)ensure(L);
   if(!L._da)return;
-  map.setLayoutProperty(L.id,'visibility',L.on&&!(hHeld&&L.kind==='frame'&&!L.privat)?'visible':'none');
+  map.setLayoutProperty(L.id,'visibility',L.on&&!(hHeld&&L.kind==='frame'&&!L.privat)&&(L.kind!=='gebaeude'||d3)?'visible':'none');
   map.setPaintProperty(L.id,OP[L.kind],L.op);
+  if(L.kind==='gebaeude')map.setPaintProperty(L.id,'fill-extrusion-height',['*',['get','h'],exag]);
   if(L.adj)map.getSource('q_'+L.id)?.setCoordinates(ecken(L));
 }
 function syncOrder(){
@@ -730,6 +756,7 @@ function apply3D(kippen){
     map.setTerrain(null);
     if(kippen)map.easeTo({pitch:0,duration:600});
   }
+  LAYERS.forEach(L=>{if(L.kind==='gebaeude')applyLayer(L)});
   flBaue();
 }
 function set3D(v){d3=v;store._d3=d3;save();apply3D(true);toast(d3?'3D-Gelände ein – rechte Maustaste dreht und neigt':'3D-Gelände aus')}
@@ -854,7 +881,6 @@ document.getElementById('fl_farbe').onchange=e=>{FL.farbe=e.target.value;flMerke
 document.getElementById('fl_farbe').value=FL.farbe;
 document.getElementById('fl_filter').value=String(FL.grenze);
 document.getElementById('fl_filter').onchange=e=>{FL.grenze=+e.target.value;flMerke();flBaue();flListe()};
-let flPopup=null;
 function flKlick(e){
   if(tool!=='pan'||dragLayer||!FL.daten)return;
   const p=e.features[0].properties,f=FL.daten.fluege[p.fi];if(!f)return;
@@ -862,9 +888,9 @@ function flKlick(e){
   if(p.boden)zeile.push('am Boden');
   else if(p.h!=null)zeile.push(`${Math.round(p.h)} m NHN (${Math.round(p.h/0.3048)} ft)${p.agl!=null?' · '+Math.round(p.agl)+' m über Grund':''}${p.hq==='b'?' · Druckhöhe':''}`);
   if(p.gs!=null)zeile.push(`${Math.round(p.gs)} kt (${Math.round(p.gs*1.852)} km/h)`);
-  flPopup?.remove();
-  flPopup=new maplibregl.Popup({closeButton:false,maxWidth:'260px'}).setLngLat(e.lngLat).setHTML(
-    `<b>${esc(flName(f))}</b>${f.ruf&&f.ruf!==flName(f)?' · '+esc(f.ruf):''}<br>${esc([f.typ,f.art].filter(Boolean).join(' · ')||'Typ unbekannt')}<br>${uhr(p.t)} Uhr · ${zeile.join('<br>')}<br>${esc(f.netz)}${f.empf?.length?' über '+esc(f.empf.join(', ')):''}`).addTo(map);
+  e.preventDefault();
+  zeigePopup(e.lngLat,
+    `<b>${esc(flName(f))}</b>${f.ruf&&f.ruf!==flName(f)?' · '+esc(f.ruf):''}<br>${esc([f.typ,f.art].filter(Boolean).join(' · ')||'Typ unbekannt')}<br>${uhr(p.t)} Uhr · ${zeile.join('<br>')}<br>${esc(f.netz)}${f.empf?.length?' über '+esc(f.empf.join(', ')):''}`);
 }
 // Läuft der Sammler, wächst die Datei des heutigen Tages (UTC): alle 30 s nachsehen
 setInterval(async()=>{
@@ -922,6 +948,35 @@ map.on('click',e=>{
 });
 map.on('dblclick',e=>{if(tool==='measure'&&curMeasure.length>=2){e.preventDefault();finishMeasure()}});
 
+// ── Bauleitpläne: Auskunft per Klick (WMS GetFeatureInfo) ─────────────
+function planText(txt){
+  // Antwort als text/plain: "Layer 'B_Plan'", darunter je "Feature n:" eine Liste  name = 'wert'
+  const out=[];let akt=null;
+  for(const z of txt.split(/\r?\n/)){
+    if(/^\s*Feature \d+:/.test(z)){akt={};out.push(akt);continue}
+    const m=z.match(/^\s+(\w+) = '(.*)'\s*$/);if(m&&akt)akt[m[1]]=m[2];
+  }
+  return out;
+}
+let planLauf=0;
+map.on('click',async e=>{
+  if(tool!=='pan'||dragLayer||e.defaultPrevented)return;
+  const ebenen=LAYERS.filter(L=>L.plan&&L.on).map(L=>L.plan);if(!ebenen.length)return;
+  if(map.queryRenderedFeatures(e.point,{layers:['flug-klick',...(map.getLayer('lod2')?['lod2']:[])]}).length)return;      // Flugspur und Gebäude haben Vorrang
+  const lauf=++planLauf,R=20037508.342789244,x=e.lngLat.lng*R/180,y=Math.log(Math.tan((90+e.lngLat.lat)*Math.PI/360))*R/Math.PI;
+  const m=40075016.686/(512*2**map.getZoom())*50;                                     // 50 Bildschirmpixel in Mercator-Metern
+  const q=new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:ebenen.join(','),QUERY_LAYERS:ebenen.join(','),STYLES:'',
+    CRS:'EPSG:3857',BBOX:[x-m,y-m,x+m,y+m].join(','),WIDTH:101,HEIGHT:101,I:50,J:50,INFO_FORMAT:'text/plain',FEATURE_COUNT:8});
+  let plaene=[];
+  try{const r=await fetch('https://www.geodaten-mv.de/dienste/bauleitplan_wms?'+q);if(!r.ok)throw 0;plaene=planText(await r.text())}catch(err){if(lauf===planLauf)toast('Planauskunft nicht erreichbar');return}
+  if(lauf!==planLauf||!plaene.length)return;
+  const sicher=u=>/^https:\/\/(www\.)?bauportal-mv\.de\//.test(u||'')?u:null;
+  zeigePopup(e.lngLat,plaene.map(p=>{
+    const gem=(()=>{try{return JSON.parse(p.gemeinde||'[]').map(g=>g.gemeindename).filter(Boolean).join(', ')}catch(err){return''}})(),link=sicher(p.link);
+    return`<b>${esc(p.anzeigename||p.planart_text||'Plan')}</b><br>${esc([gem,p.rechtsstand_text,p.verfahren_text&&'Verfahren '+p.verfahren_text].filter(Boolean).join(' · '))}${link?`<br><a href="${esc(link)}" target="_blank" rel="noopener">Unterlagen im Bau- und Planungsportal</a>`:''}`;
+  }).join('<hr style="border:0;border-top:1px solid #ccc;margin:6px 0">'));
+});
+
 let labels=[];
 const fmtM=d=>(d<100?d.toFixed(1):String(Math.round(d)))+' m';
 function label(x,y,text,color,cls,anchor){
@@ -964,11 +1019,12 @@ document.getElementById('t_mark').onclick=()=>setTool(tool==='mark'?'pan':'mark'
 document.getElementById('t_clear').onclick=()=>{measures=[];curMeasure=[];markers=[];mouseWorld=null;persistAnno();renderAnnotations();setTool('pan');toast('Alle Messungen und Marker entfernt')};
 
 // ── Presets ───────────────────────────────────────────────────────────
-const allOff=Object.fromEntries(LAYERS.map(L=>[L.id,[0]]));
+const allOff=Object.fromEntries(LAYERS.filter(L=>L.kind!=='gebaeude').map(L=>[L.id,[0]]));   // 3D-Gebäude bleiben von Voreinstellungen unberührt
 const f45={...allOff,'3054':[1,.85],'4071':[1,.85],'4053':[1,.85]};
 const PRE={
  'heute':   {...allOff,heute:[1,1],alkis:[1,1]},
  'topo':    {...allOff,topo:[1,1],alkis:[1,.6]},
+ 'planung': {...allOff,heute:[1,1],fplan:[1,.35],bplan:[1,.7],alkis:[1,.6]},
  'google':  {...allOff,google:[1,1],alkis:[1,.7]},
  '1945':    {...f45,heute:[1,1]},
  '1945alk': {...f45,heute:[1,1],alkis:[1,.8]},
