@@ -1,0 +1,22 @@
+{
+ "tage": [
+  {
+   "datum": "2026-08-01",
+   "fluege": 29,
+   "flugzeuge": 26,
+   "datei": "2026-08-01.json"
+  },
+  {
+   "datum": "2026-08-02",
+   "fluege": 24,
+   "flugzeuge": 20,
+   "datei": "2026-08-02.json"
+  },
+  {
+   "datum": "2026-11-07",
+   "fluege": 11,
+   "flugzeuge": 11,
+   "datei": "2026-11-07.json"
+  }
+ ]
+}

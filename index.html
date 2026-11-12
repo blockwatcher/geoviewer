@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<title>Luftbildatlas Lärz – MapLibre 3D</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Interaktiver Kartenvergleich: Fliegerhorst Lärz / Müritz Airpark von 1877 bis heute. MapLibre-Karte mit 3D-Gelände aus dem DGM1, Messwerkzeugen und GPS-Standort.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-512.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#d9a400">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lärz Atlas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<style>
+:root{
+  --bg:#eef0ec;--panel:#fbfbf8;--ink:#1d2321;--muted:#5d6763;--line:#cfd5d0;
+  --accent:#d9a400;--accent-ink:#1d2321;--sel:#fff4c9;--map:#c9cdc6;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151918;--panel:#1d2221;--ink:#e6ebe7;--muted:#9aa6a1;--line:#343c3a;--accent:#f2c230;--accent-ink:#151918;--sel:#3a3418;--map:#0f1211;color-scheme:dark}}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;overflow:hidden}
+.app{display:grid;grid-template-columns:1fr 360px;height:100%}
+/* Karte */
+#view{position:relative;overflow:hidden;background:var(--map);min-width:0;min-height:0}
+#map{position:absolute;inset:0}
+#view.movelayer .maplibregl-canvas-container{cursor:move}
+#view.tool-active .maplibregl-canvas-container{cursor:crosshair}
+.maplibregl-ctrl-attrib{font-family:var(--f-body);font-size:10px}
+.lbl{font-family:var(--f-body);font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;
+  text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 3px #000}
+.lbl.mono{font-family:var(--f-mono);font-weight:500;font-size:11px}
+.lbl.sum{font-size:14px}
+/* Werkzeugleiste */
+.tools{position:absolute;left:10px;top:10px;display:flex;gap:4px;z-index:2;flex-wrap:wrap;max-width:calc(100% - 70px)}
+.tools button{height:32px;font-size:12px;font-weight:500;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;padding:0 10px;font-family:var(--f-body)}
+.tools button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.zoom button{width:36px;height:36px;font-size:18px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-family:var(--f-body);padding:0}
+.zoom button.txt{font-size:12px;font-weight:600}
+.zoom button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#znorth span{display:inline-block;transition:transform .1s linear}
+/* HUD */
+.hud{position:absolute;left:max(10px,env(safe-area-inset-left,0px));bottom:10px;display:flex;gap:8px;align-items:flex-end;pointer-events:none;z-index:2}
+.chip{background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--f-mono);font-size:11px;line-height:1.4;pointer-events:auto}
+.chip small{display:block;color:var(--muted);font-size:10px}
+#scalebar{height:6px;border:2px solid var(--ink);border-top:none;margin-top:3px}
+#toast{position:absolute;top:50px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 12px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;z-index:3;pointer-events:none;max-width:90%}
+#toast.on{opacity:1}
+/* Panel */
+.panel{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.phead{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.phead h1{font-family:var(--f-display);font-weight:600;font-size:22px;letter-spacing:.02em}
+.mob-reset{display:none}
+.pull-hint{display:none}
+.phead p{margin:4px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+.pbody{overflow-y:auto;padding:8px 0 16px;flex:1;min-height:0}
+.sec{padding:8px 16px}
+.sec h2{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 6px}
+/* Ebenen */
+.row{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;position:relative}
+.row.sel{background:var(--sel)}
+.row label{display:flex;flex-direction:column;min-width:0;cursor:pointer}
+.row .nm{font-weight:500;font-size:13px}
+.row .sub{color:var(--muted);font-size:11px;font-family:var(--f-mono)}
+.row input[type=range]{grid-column:1/4;width:100%;accent-color:var(--accent);margin:2px 0 0}
+.row .acts{display:flex;gap:4px;align-items:center}
+.adj,.ibtn{font-size:11px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:4px;padding:2px 6px;cursor:pointer;font-family:var(--f-body)}
+.adj[aria-pressed=true],.ibtn.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.ldesc{grid-column:1/4;font-size:11px;color:var(--muted);line-height:1.4;padding:4px 0 2px;border-top:1px dashed var(--line);margin-top:4px}
+.reord{display:flex;flex-direction:column;gap:1px}
+.reord button{width:18px;height:14px;font-size:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;border-radius:3px;padding:0;line-height:1}
+/* Anpassen / 3D */
+#adjbox,.box3d{margin:4px 16px 8px;padding:10px 12px;border:1px solid var(--accent);border-radius:8px;display:grid;gap:8px}
+.box3d{border-color:var(--line);margin:0}
+#adjbox .t{font-family:var(--f-display);font-weight:600;font-size:15px}
+.ctl{display:grid;grid-template-columns:78px 1fr 60px;gap:6px;align-items:center}
+.ctl span{color:var(--muted);font-size:11px}
+.ctl output{font-family:var(--f-mono);font-size:11px;text-align:right}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctl input[type=number]{width:100%;font-family:var(--f-mono);font-size:11px;padding:2px 4px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+button.b{font-family:var(--f-body);font-size:13px;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button.b.pri,button.b[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{color:var(--muted);font-size:12px;line-height:1.45}
+/* Flugspuren */
+.sel{font-family:var(--f-body);font-size:13px;padding:5px 6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);max-width:100%}
+#fl_legende .verlauf{height:8px;border-radius:4px;border:1px solid var(--line)}
+#fl_legende .skala{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10px;color:var(--muted);margin-top:2px}
+#fl_liste{max-height:190px;overflow-y:auto;display:grid;gap:1px}
+.flrow{display:grid;grid-template-columns:12px 86px 1fr auto;gap:6px;align-items:center;padding:3px 4px;border-radius:4px;border:0;background:transparent;color:var(--ink);font-family:var(--f-mono);font-size:11px;text-align:left;cursor:pointer;width:100%}
+.flrow:hover{background:var(--sel)}
+.flrow i{width:10px;height:10px;border-radius:2px;display:block}
+.flrow span:last-child{color:var(--muted)}
+.maplibregl-popup-content{font-family:var(--f-body);font-size:12px;line-height:1.45;color:#1d2321;padding:8px 10px}
+.maplibregl-popup-content b{font-family:var(--f-display);font-size:15px}
+#privpw{flex:1;min-width:140px;font-family:var(--f-body);font-size:13px;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+table.q{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+table.q td,table.q th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
+table.q td:first-child,table.q th:first-child{text-align:left}
+/* Mobil */
+@media(max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  .panel{border-left:none;border-top:1px solid var(--line);max-height:55vh;transition:max-height .3s ease}
+  .panel.collapsed{max-height:52px;overflow:hidden}
+  .panel.collapsed .pbody{display:none}
+  .panel.collapsed .phead .pull-hint{display:block}
+  .phead{cursor:pointer;-webkit-tap-highlight-color:transparent;padding:12px 16px 8px;position:relative}
+  .phead::after{content:'';position:absolute;top:5px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:var(--accent);border-radius:3px;opacity:.7}
+  .phead h1{font-size:18px}
+  .phead p{display:none}
+  .pull-hint{color:var(--muted);font-size:11px;margin-top:2px}
+  .mob-reset{display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;font-size:18px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:6px;cursor:pointer;vertical-align:middle;margin-left:6px;padding:0}
+  .tools{gap:3px;left:6px;top:6px;max-width:calc(100% - 62px)}
+  .tools button{height:40px;min-width:40px;font-size:13px;padding:0 8px;border-radius:8px}
+  .zoom{right:6px;top:6px;gap:4px}
+  .zoom button{width:44px;height:40px;font-size:22px;border-radius:8px}
+  .zoom button.txt{font-size:13px}
+  .hud{left:6px;bottom:6px;gap:4px}
+  .chip{font-size:10px;padding:4px 6px}
+  .chip small{font-size:9px}
+  .row{gap:4px;padding:4px 6px}
+  .row .nm{font-size:12px}
+  .row .sub{font-size:10px}
+  .reord{display:none}
+  .sec{padding:6px 12px}
+  .btns{gap:4px}
+  button.b{padding:8px 10px;font-size:12px;min-height:40px}
+  .adj,.ibtn{min-width:32px;min-height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+  #adjbox{margin:4px 12px 6px}
+}
+@media(prefers-reduced-motion:reduce){#toast{transition:none}.panel{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="view" aria-label="Karte">
+    <div id="map"></div>
+    <div class="tools">
+      <button id="t_measure" title="Entfernungen messen (M)">Messen</button>
+      <button id="t_mark" title="Punkte setzen (P)">Markieren</button>
+      <button id="t_clear" title="Messungen und Markierungen entfernen">Entfernen</button>
+      <button id="t_gps" title="GPS-Standort anzeigen">Standort</button>
+      <button id="t_3d" title="3D-Gelände aus dem DGM1 ein-/ausschalten (D)">3D</button>
+    </div>
+    <div class="zoom">
+      <button id="zin" aria-label="Hineinzoomen">+</button>
+      <button id="zout" aria-label="Herauszoomen">&minus;</button>
+      <button id="znorth" title="Nach Norden ausrichten" aria-label="Nach Norden ausrichten"><span>&#8593;</span></button>
+      <button id="zhome" title="Auf den Airpark zentrieren">&loz;</button>
+      <button id="zall" title="Gesamter Flugplatz" aria-label="Gesamter Flugplatz">&#9974;</button>
+      <button id="zfusion" class="txt" title="Fusion-Gelände" aria-label="Fusion-Gelände">F</button>
+    </div>
+    <div class="hud">
+      <div class="chip" id="coord">E &mdash; &middot; N &mdash;</div>
+      <div class="chip"><span id="scalelbl">100 m</span><div id="scalebar" style="width:100px"></div></div>
+    </div>
+    <div id="toast" role="status"></div>
+  </div>
+
+  <aside class="panel">
+    <div class="phead">
+      <h1>Luftbildatlas Lärz <button class="mob-reset" id="mob_reset" title="Heute + Grundst&uuml;cke">&loz;</button></h1>
+      <div class="pull-hint">Antippen f&uuml;r Ebenen und Einstellungen &darr;</div>
+      <p>Ehemaliger Fliegerhorst Lärz (heute Müritz Airpark) &ndash; historische und aktuelle Karten im Vergleich, jetzt als MapLibre-Karte mit 3D-Gelände aus dem amtlichen Geländemodell (DGM1). Luftaufklärung von Mai 1944 bis 11.04.1945, Luftbilder 1953 und 1991, Messtischblatt, basemap.de und Satellitenbilder.</p>
+    </div>
+    <div class="pbody">
+      <div class="sec">
+        <h2>3D-Gelände</h2>
+        <div class="box3d">
+          <div class="btns">
+            <button class="b" id="d3_toggle" aria-pressed="false">3D-Ansicht</button>
+            <button class="b" id="d3_reset">Draufsicht, Norden oben</button>
+          </div>
+          <div class="ctl"><span>&Uuml;berh&ouml;hung</span><input type="range" id="d3_exag" min="1" max="10" step="0.5" value="1"><output id="d3_exag_o">1&times;</output></div>
+          <div class="note">Höhen aus dem DGM1 (Laserscan, 1&nbsp;m Raster). Das Gelände ist flach (<span id="d3_range">60&ndash;85</span>&nbsp;m), die Überhöhung macht Wälle, Splitterboxen und Trichter sichtbar. Neigen und drehen: rechte Maustaste oder Strg + ziehen, am Handy mit zwei Fingern.</div>
+        </div>
+      </div>
+      <div class="sec" id="flugsec">
+        <h2>Flugspuren (ADS-B, FLARM)</h2>
+        <div class="box3d">
+          <div class="btns">
+            <button class="b" id="fl_toggle" aria-pressed="false">Flugspuren</button>
+            <select id="fl_tag" class="sel" aria-label="Tag"></select>
+            <select id="fl_farbe" class="sel" aria-label="Einfärbung"><option value="hoehe">Farbe: Höhe über Grund</option><option value="flz">Farbe: Flugzeug</option></select>
+            <select id="fl_filter" class="sel" aria-label="Höhenfilter"><option value="0">Alle Flüge</option><option value="3000">Ohne Überflüge (über 3000 m)</option><option value="1500">Nur unter 1500 m</option><option value="600">Nur unter 600 m</option></select>
+          </div>
+          <div id="fl_legende"><div class="verlauf"></div><div class="skala"><span>0</span><span>150</span><span>300</span><span>600</span><span>1200</span><span>3000 m</span></div></div>
+          <div class="note" id="fl_info">Lade Flugdaten …</div>
+          <div id="fl_liste"></div>
+        </div>
+      </div>
+      <div class="sec"><h2>Ebenen</h2><div id="layers"></div></div>
+      <div class="sec" id="privsec" hidden>
+        <h2>Airpark intern</h2>
+        <form id="privform" class="btns">
+          <input type="password" id="privpw" placeholder="Passwort" autocomplete="current-password" aria-label="Passwort">
+          <button class="b pri">Entsperren</button>
+          <label class="note" style="display:flex;gap:6px;align-items:center;width:100%"><input type="checkbox" id="privmerk" checked> Auf diesem Ger&auml;t merken</label>
+        </form>
+        <div id="privok" class="btns" style="align-items:center" hidden><span class="note" id="privinfo"></span><button class="b" id="privlock">Sperren</button></div>
+      </div>
+      <div id="adjbox" hidden>
+        <div class="t" id="adjtitle">Ebene anpassen</div>
+        <div class="ctl"><span>Ost/West (m)</span><input type="range" id="r_dx" min="-150" max="150" step="0.5"><input type="number" id="n_dx" step="0.5"></div>
+        <div class="ctl"><span>Nord/Süd (m)</span><input type="range" id="r_dy" min="-150" max="150" step="0.5"><input type="number" id="n_dy" step="0.5"></div>
+        <div class="ctl"><span>Drehung (&deg;)</span><input type="range" id="r_rot" min="-15" max="15" step="0.05"><input type="number" id="n_rot" step="0.05"></div>
+        <div class="ctl"><span>Maßstab (%)</span><input type="range" id="r_sc" min="80" max="120" step="0.1"><input type="number" id="n_sc" step="0.1"></div>
+        <div class="btns">
+          <button class="b" id="dragmode" aria-pressed="false">Mit Maus ziehen</button>
+          <button class="b" id="adjreset">Zurücksetzen</button>
+          <button class="b" id="adjdone">Fertig</button>
+        </div>
+        <div class="note">Im Zieh-Modus verschiebt die Maus die Ebene statt der Karte. Pfeiltasten: 1 m, mit Umschalt 10 m.</div>
+      </div>
+      <div class="sec">
+        <h2>Voreinstellungen</h2>
+        <div class="btns">
+          <button class="b pri" data-preset="heute">Heute + Grundst&uuml;cke</button>
+          <button class="b" data-preset="1945">1945 &uuml;ber heute</button>
+          <button class="b" data-preset="1945alk">1945 + Grundst&uuml;cke</button>
+          <button class="b" data-preset="1953">1945 gegen 1953</button>
+          <button class="b" data-preset="1944">Mai 1944 &uuml;ber heute</button>
+          <button class="b" data-preset="vornach">Vor / nach 10.04.1945</button>
+          <button class="b" data-preset="1991">1991 (Wende)</button>
+          <button class="b" data-preset="1991h">1991 &uuml;ber heute</button>
+          <button class="b" data-preset="ddr">DDR-Karte + 1945</button>
+          <button class="b" data-preset="messtisch">Messtischblatt + 1945</button>
+          <button class="b" data-preset="messtischh">Messtischblatt &uuml;ber heute</button>
+          <button class="b" data-preset="relief">Gel&auml;ndemodell + 1945</button>
+          <button class="b" data-preset="reliefh">Gel&auml;ndemodell + heute</button>
+          <button class="b" data-preset="hoehen">H&ouml;henfarben (DGM1)</button>
+          <button class="b" data-preset="topo">Topo + Grundst&uuml;cke</button>
+          <button class="b" data-preset="google">Google Satellite</button>
+          <button class="b" data-preset="alle1945">Alle Ebenen 1945</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h2>Anleitung</h2>
+        <div class="note" style="line-height:1.6">
+          <b>Karte bewegen</b> &ndash; Maus ziehen oder mit einem Finger wischen. Mausrad oder Pinch zum Zoomen.<br>
+          <b>3D</b> &ndash; Der Knopf &bdquo;3D&ldquo; (oder Taste <b>D</b>) kippt die Karte und legt alle Ebenen auf das Geländemodell. Rechte Maustaste oder Strg + ziehen dreht und neigt die Ansicht, der Pfeil-Knopf richtet sie wieder nach Norden aus.<br>
+          <b>Ebenen</b> &ndash; Kartenebenen per Checkbox ein- und ausblenden. Der Schieberegler steuert die Durchsichtigkeit. &Uuml;ber <b>&uarr;&darr;</b> &auml;ndern Sie die Zeichenreihenfolge, &uuml;ber <b>i</b> sehen Sie die Herkunft der Daten.<br>
+          <b>Anpassen</b> &ndash; Die Luftbilder 1944/45 können manuell verschoben werden: &bdquo;Anpassen&ldquo; klicken und mit Reglern, Pfeiltasten oder der Maus verschieben.<br>
+          <b>Messen</b> &ndash; &bdquo;Messen&ldquo; (oder Taste <b>M</b>), dann Punkte auf die Karte klicken. Die Entfernung wird in Metern angezeigt. Doppelklick beendet die Messung.<br>
+          <b>Markieren</b> &ndash; &bdquo;Markieren&ldquo; (oder Taste <b>P</b>) setzt Punkte mit UTM-Koordinaten und Geländehöhe.<br>
+          <b>Standort</b> &ndash; Schaltet den blauen GPS-Punkt ein und zentriert die Karte einmal darauf. Nochmal tippen springt zur&uuml;ck zum Punkt; ist die Karte schon dort, schaltet das Tippen den Standort aus.<br>
+          <b>Taste H</b> &ndash; Gedr&uuml;ckt halten blendet die 1945er Bilder kurz aus.<br>
+          <b>Escape</b> &ndash; Bricht die aktuelle Messung ab oder schlie&szlig;t das Anpassen-Fenster.
+        </div>
+      </div>
+      <div class="sec">
+        <h2>Bild-Export</h2>
+        <div class="btns">
+          <button class="b" id="exp_png">PNG speichern</button>
+          <button class="b" id="exp_jpg">JPG speichern</button>
+        </div>
+        <p class="note">Exportiert den aktuellen Kartenausschnitt (auch in 3D) mit den sichtbaren Ebenen und Messungen.</p>
+      </div>
+      <div class="sec">
+        <h2>Sitzung speichern / laden</h2>
+        <p class="note" style="margin-bottom:6px">Speichert Ebenen, Deckkraft, Reihenfolge, Verschiebungen, Messungen, Marker und die Kartenansicht als JSON-Datei. Sitzungsdateien des ursprünglichen Atlas lassen sich ebenfalls laden (ohne deren Kartenansicht).</p>
+        <div class="btns">
+          <button class="b pri" id="sess_save">Sitzung als JSON speichern</button>
+          <button class="b" id="sess_load">Sitzung aus JSON laden</button>
+          <button class="b" id="export">Anpassungen kopieren</button>
+          <button class="b" id="resetall">Verschiebungen zur&uuml;cksetzen</button>
+          <button class="b" id="resetfull">Alles auf Werkseinstellung</button>
+        </div>
+        <input type="file" id="sess_file" accept=".json,application/json" hidden>
+        <textarea id="exportbox" hidden readonly style="width:100%;height:60px;margin-top:6px;font-family:var(--f-mono);font-size:11px"></textarea>
+      </div>
+      <div class="sec">
+        <h2>Genauigkeit</h2>
+        <table class="q">
+          <tr><th>Bild</th><th>Passpunkte</th><th>Restfehler</th><th>m/px</th></tr>
+          <tr><td colspan="4"><i>Hochaufgel&ouml;ste Scans (NCAP)</i></td></tr>
+          <tr><td>3054</td><td>71 + Verkn.</td><td>1,8 m</td><td>0,195</td></tr>
+          <tr><td>4071</td><td>29 + Verkn.</td><td>2,9 m</td><td>0,183</td></tr>
+          <tr><td>4053</td><td>105 + 1280</td><td>2,5 m</td><td>0,194</td></tr>
+          <tr><td colspan="4"><i>Vorschauen (LAiV M-V)</i></td></tr>
+          <tr><td>10.05.44</td><td>34&ndash;87 je Bild</td><td>1&ndash;6 m</td><td>~2</td></tr>
+          <tr><td>28.05.44</td><td>56&ndash;159 je Bild</td><td>2&ndash;5 m</td><td>~1,8</td></tr>
+          <tr><td>04.08.44</td><td>49</td><td>~20 m</td><td>~9</td></tr>
+          <tr><td>13.09.44</td><td>40</td><td>~25 m</td><td>~8</td></tr>
+          <tr><td>24.12.44</td><td>92</td><td>~10 m</td><td>~7</td></tr>
+          <tr><td>08.04.45</td><td>24&ndash;204 je Bild</td><td>1&ndash;3 m</td><td>~1,7</td></tr>
+          <tr><td>11.04.45</td><td>bis 78 je Bild</td><td>1&ndash;2 m</td><td>~0,8</td></tr>
+        </table>
+        <p class="note">Passpunkte automatisch per Bildkorrelation gegen das Luftbild 1953. Projektiv entzerrt (RANSAC). Die Mosaike liegen in UTM 33N vor und werden über ihre vier Ecken in die Web-Mercator-Karte eingepasst (Abweichung in der Bildmitte unter 0,4 m). Die amtlichen Ebenen kommen direkt von den Diensten des Landes und des BKG.</p>
+      </div>
+      <div class="sec note">Quellen: NCAP (US7/0094/C, Frames 3054, 4053, 4071; &copy; National Collection of Aerial Photography) &middot; DOP, DOP 1953, DOP 1991, ALKIS, TK25, DTK25, DGM1/DGM25 &copy; GeoBasis-DE/M-V (CC BY 4.0) &middot; Historische Luftbilder 1944 und 08.04.1945: LAiV M-V, &copy; GeoBasis-DE/MV 2026, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (Quelle verändert: entzerrt und mosaikiert) &middot; TopPlusOpen, Sentinel-2 &copy; BKG (dl-de/by-2-0) &middot; basemap.de &copy; BKG / OSM-Mitwirkende &middot; Google Satellite &copy; Google. Keine Kampfmittelauskunft &ndash; für Bauvorhaben gilt allein die Auskunft des MBD M-V (LPBK M-V).</div>
+      <div class="sec note" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">Georeferenzierung und ursprünglicher Atlas: soenke.bartling@gmail.com (<a href="https://soenkeba.github.io/Luftbildatlas_Laerz_oeffentlich/" target="_blank" rel="noopener">Original</a>). Diese Fassung: MapLibre GL JS mit 3D-Gelände.</div>
+    </div>
+  </aside>
+</div>
+
+<script src="lib/maplibre-gl.js"></script>
+<script>
+// ── Grunddaten ────────────────────────────────────────────────────────
+// Homographien der NCAP-Frames: Bildpixel -> Karten-Meter (x = E - 348600, y = 5909100 - N)
+const D={"frames":{"4071":{"w":3907,"h":4000,"H":[[0.2775551976335041,-0.2398043009421563,1539.1153396668526],[0.23774214595057017,0.28466585912424636,-295.54922803133263],[3.033069948012005e-06,-3.53271600096826e-06,1.0]],"clip":[320,240,3690,3615]},"4053":{"w":4000,"h":3907,"H":[[0.2825046883051741,-0.23215000865109067,1541.3039070978004],[0.20953070539388824,0.2923342208696238,639.0608963378667],[-1.2119405421321635e-05,-2.8086918949386513e-06,1.0]],"clip":[235,260,3615,3570]},"3054":{"w":4000,"h":3907,"H":[[0.3160045177905764,-0.23942095431426627,430.35614749391937],[0.24756108965172538,0.30314710376242976,-191.01063050355384],[7.874872346411879e-06,-4.41056866739144e-06,1.0]],"clip":[260,210,3615,3590]}}};
+const LS='laerz-atlas-ml-v1';
+const BILDSTAND='2026-11-04';
+const BILDER='bilder/';                      // lokale Kopien, siehe tools/daten_laden.py
+const ORIGINAL='https://soenkeba.github.io/Luftbildatlas_Laerz_oeffentlich/app/';
+// Gesamtgebiet in Karten-Metern (ganzer Flugplatz mit Fusion-Gelände)
+const GEB={x0:-400,y0:-1400,s:3800};
+const MOBIL=()=>window.innerWidth<=760;
+let store={};try{store=JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){store={}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(store))}catch(e){}}
+const applyH=(H,x,y)=>{const w=H[2][0]*x+H[2][1]*y+H[2][2];return[(H[0][0]*x+H[0][1]*y+H[0][2])/w,(H[1][0]*x+H[1][1]*y+H[1][2])/w]};
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ── UTM Zone 33N ↔ WGS84 ─────────────────────────────────────────────
+const _a=6378137,_f=1/298.257223563,_b=_a*(1-_f),_e2=(_a*_a-_b*_b)/(_a*_a),_ep2=(_a*_a-_b*_b)/(_b*_b),_k0=.9996,_lon0=15;
+function utm33ToLL(E,N){
+  const M=N/_k0,mu=M/(_a*(1-_e2/4-3*_e2*_e2/64-5*_e2**3/256));
+  const e1=(1-Math.sqrt(1-_e2))/(1+Math.sqrt(1-_e2));
+  const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1*e1/16-55*e1**4/32)*Math.sin(4*mu)+151*e1**3/96*Math.sin(6*mu);
+  const sp=Math.sin(p),cp=Math.cos(p),tp=Math.tan(p);
+  const N1=_a/Math.sqrt(1-_e2*sp*sp),T1=tp*tp,C1=_ep2*cp*cp;
+  const R1=_a*(1-_e2)/(1-_e2*sp*sp)**1.5,DD=(E-500000)/(N1*_k0);
+  const lat=p-N1*tp/R1*(DD*DD/2-(5+3*T1+10*C1-4*C1*C1-9*_ep2)*DD**4/24+(61+90*T1+298*C1+45*T1*T1-252*_ep2-3*C1*C1)*DD**6/720);
+  const lon=(DD-(1+2*T1+C1)*DD**3/6+(5-2*C1+28*T1-3*C1*C1+8*_ep2+24*T1*T1)*DD**5/120)/cp;
+  return{lat:lat*180/Math.PI,lon:_lon0+lon*180/Math.PI};
+}
+function llToUTM33(lat,lon){
+  const p=lat*Math.PI/180,l=(lon-_lon0)*Math.PI/180;
+  const sp=Math.sin(p),cp=Math.cos(p),tp=Math.tan(p);
+  const N=_a/Math.sqrt(1-_e2*sp*sp),T=tp*tp,C=_ep2*cp*cp,A=cp*l;
+  const M=_a*((1-_e2/4-3*_e2*_e2/64-5*_e2**3/256)*p-(3*_e2/8+3*_e2*_e2/32+45*_e2**3/1024)*Math.sin(2*p)
+    +(15*_e2*_e2/256+45*_e2**3/1024)*Math.sin(4*p)-35*_e2**3/3072*Math.sin(6*p));
+  return{e:_k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*_ep2)*A**5/120)+500000,
+         n:_k0*(M+N*tp*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*_ep2)*A**6/720))};
+}
+// Karten-Meter (x nach Osten, y nach Süden) ↔ [lng,lat]
+function w2ll(x,y){const p=utm33ToLL(348600+x,5909100-y);return[p.lon,p.lat]}
+function ll2w(ll){const u=llToUTM33(ll.lat??ll[1],ll.lng??ll[0]);return{x:u.e-348600,y:5909100-u.n}}
+
+// ── Geländemodell: DGM1 + DGM25 → Terrarium-Kacheln für MapLibre ─────
+// Die Höhen liegen als UTM-Raster in dgm/ (tools/daten_laden.py). Ein eigenes Protokoll rechnet daraus
+// beim Abruf Web-Mercator-Kacheln; so genügen wenige Dateien statt einer Kachelpyramide.
+const DGM={meta:null,fein:new Map(),feinLadend:new Map(),grob:null,grobLadend:null,bereit:null};
+function leinwand(w,h){if(typeof OffscreenCanvas!=='undefined')return new OffscreenCanvas(w,h);const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+async function dgmPng(url){
+  const r=await fetch(url);if(!r.ok)throw new Error(url+': HTTP '+r.status);
+  const bmp=await createImageBitmap(await r.blob(),{colorSpaceConversion:'none',premultiplyAlpha:'none'});
+  const c=leinwand(bmp.width,bmp.height),ctx=c.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(bmp,0,0);const px=ctx.getImageData(0,0,bmp.width,bmp.height).data;
+  const k=DGM.meta.kodierung,d=new Float32Array(bmp.width*bmp.height);
+  for(let i=0,j=0;i<d.length;i++,j+=4)d[i]=(px[j]*256+px[j+1])/k.skala-k.offset_m;
+  return{w:bmp.width,h:bmp.height,d};
+}
+DGM.bereit=fetch('dgm/dgm.json').then(r=>{if(!r.ok)throw new Error('dgm.json fehlt');return r.json()}).then(m=>{DGM.meta=m;return m});
+function dgmGrob(){return DGM.grobLadend||(DGM.grobLadend=dgmPng('dgm/'+DGM.meta.umland.datei).then(g=>DGM.grob=g))}
+function dgmFein(sp,ze){
+  const key=sp+'_'+ze;let p=DGM.feinLadend.get(key);
+  if(!p){p=dgmPng('dgm/'+DGM.meta.fein.muster.replace('{sp}',sp).replace('{ze}',ze)).then(k=>{DGM.fein.set(key,k);return k});DGM.feinLadend.set(key,p)}
+  return p;
+}
+function bilinear(r,fx,fy){
+  fx=Math.max(0,Math.min(r.w-1.001,fx));fy=Math.max(0,Math.min(r.h-1.001,fy));
+  const ix=fx|0,iy=fy|0,ax=fx-ix,ay=fy-iy,o=iy*r.w+ix,d=r.d;
+  return(d[o]*(1-ax)+d[o+1]*ax)*(1-ay)+(d[o+r.w]*(1-ax)+d[o+r.w+1]*ax)*ay;
+}
+// Höhe in m aus den bereits geladenen Rastern (NaN, wenn nichts geladen ist)
+function dgmHoehe(E,N,ohneFein){
+  const m=DGM.meta;if(!m)return NaN;
+  let hf=NaN,gew=0;
+  if(!ohneFein){
+    const f=m.fein,dx=E-f.e0,dy=f.n1-N,rand=Math.min(dx,dy,f.breite*f.res-dx,f.hoehe*f.res-dy);
+    if(rand>0){
+      const fx=Math.max(0,Math.min(f.breite-1,dx/f.res-.5)),fy=Math.max(0,Math.min(f.hoehe-1,dy/f.res-.5));
+      const sp=Math.min(f.kacheln-1,(fx/f.kachel_px)|0),ze=Math.min(f.kacheln-1,(fy/f.kachel_px)|0),k=DGM.fein.get(sp+'_'+ze);
+      if(k){hf=bilinear(k,fx-sp*f.kachel_px,fy-ze*f.kachel_px);gew=Math.min(1,rand/40)}   // 40 m weicher Übergang zum Umland
+    }
+  }
+  if(gew>=1)return hf;
+  const g=m.umland;if(!DGM.grob)return gew>0?hf:NaN;
+  const hg=bilinear(DGM.grob,(E-g.e0)/g.res-.5,(g.n1-N)/g.res-.5);
+  return gew>0?hf*gew+hg*(1-gew):hg;
+}
+async function dgmKachel(z,x,y){
+  await DGM.bereit;await dgmGrob();
+  const S=256,G=16,n=2**z,gE=new Float64Array((G+1)*(G+1)),gN=new Float64Array((G+1)*(G+1));
+  let e0=Infinity,e1=-Infinity,n0=Infinity,n1=-Infinity;
+  for(let j=0;j<=G;j++)for(let i=0;i<=G;i++){
+    const lon=(x+i/G)/n*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(y+j/G)/n)))*180/Math.PI,u=llToUTM33(lat,lon),o=j*(G+1)+i;
+    gE[o]=u.e;gN[o]=u.n;e0=Math.min(e0,u.e);e1=Math.max(e1,u.e);n0=Math.min(n0,u.n);n1=Math.max(n1,u.n);
+  }
+  // DGM1 nur dort laden, wo die Kachel es auflöst (ab Zoom 14) und das Gebiet berührt
+  const f=DGM.meta.fein,fe1=f.e0+f.breite*f.res,fn0=f.n1-f.hoehe*f.res,ohneFein=z<14||e1<f.e0||e0>fe1||n1<fn0||n0>f.n1;
+  if(!ohneFein){
+    const kp=f.kachel_px*f.res,cl=v=>Math.max(0,Math.min(f.kacheln-1,v)),laden=[];
+    for(let sp=cl(Math.floor((e0-f.e0)/kp));sp<=cl(Math.floor((e1-f.e0)/kp));sp++)
+      for(let ze=cl(Math.floor((f.n1-n1)/kp));ze<=cl(Math.floor((f.n1-n0)/kp));ze++)laden.push(dgmFein(sp,ze));
+    await Promise.all(laden);
+  }
+  const out=new Uint8ClampedArray(S*S*4);
+  for(let j=0,o=0;j<S;j++){
+    const v=(j+.5)/S*G,gj=Math.min(G-1,v|0),av=v-gj;
+    for(let i=0;i<S;i++,o+=4){
+      const u=(i+.5)/S*G,gi=Math.min(G-1,u|0),au=u-gi,q=gj*(G+1)+gi;
+      const E=(gE[q]*(1-au)+gE[q+1]*au)*(1-av)+(gE[q+G+1]*(1-au)+gE[q+G+2]*au)*av;
+      const N=(gN[q]*(1-au)+gN[q+1]*au)*(1-av)+(gN[q+G+1]*(1-au)+gN[q+G+2]*au)*av;
+      const h=dgmHoehe(E,N,ohneFein)+32768,hi=Math.floor(h);
+      out[o]=hi>>8;out[o+1]=hi&255;out[o+2]=(h-hi)*256;out[o+3]=255;
+    }
+  }
+  return createImageBitmap(new ImageData(out,S,S));
+}
+maplibregl.addProtocol('dgm',async params=>{
+  const[z,x,y]=params.url.replace('dgm://','').split('/').map(Number);
+  return{data:await dgmKachel(z,x,y)};
+});
+
+// ── WMS des Landes M-V ───────────────────────────────────────────────
+// Der Dienst stempelt jedes Bild oben links mit einem Copyright-Vermerk. Darum jede Kachel mit Rand
+// abrufen und den Rand abschneiden; das vermeidet auch abgeschnittene Beschriftungen an den Kanten.
+const WMS_RAND=32;
+maplibregl.addProtocol('mvwms',async(params,abort)=>{
+  const[svc,q]=params.url.replace('mvwms://','').split('?'),sp=new URLSearchParams(q);
+  const px=+sp.get('px')||512,bb=sp.get('BBOX').split(',').map(Number),m=(bb[2]-bb[0])*WMS_RAND/px;sp.delete('px');
+  sp.set('BBOX',[bb[0]-m,bb[1]-m,bb[2]+m,bb[3]+m].join(','));sp.set('WIDTH',px+2*WMS_RAND);sp.set('HEIGHT',px+2*WMS_RAND);
+  const r=await fetch(`https://www.geodaten-mv.de/dienste/${svc}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&CRS=EPSG:3857&${sp}`,{signal:abort.signal});
+  if(!r.ok)throw new Error('WMS '+svc+': HTTP '+r.status);
+  const blob=await r.blob();if(!blob.type.startsWith('image/'))throw new Error('WMS '+svc+': kein Bild');
+  return{data:await createImageBitmap(blob,WMS_RAND,WMS_RAND,px,px)};
+});
+const MV='© <a href="https://www.laiv-mv.de/" target="_blank" rel="noopener">GeoBasis-DE/M-V</a>',BKG='© <a href="https://www.bkg.bund.de/" target="_blank" rel="noopener">BKG</a>';
+const mv=(svc,layers,o={})=>({type:'raster',tileSize:512,minzoom:o.minzoom??8,maxzoom:o.maxzoom??18,attribution:MV,
+  tiles:[`mvwms://${svc}?LAYERS=${layers}&STYLES=${o.styles||''}&FORMAT=${o.png?'image/png&TRANSPARENT=TRUE':'image/jpeg'}&px=512&BBOX={bbox-epsg-3857}`]});
+const s2=jahr=>({type:'raster',tileSize:256,maxzoom:14,attribution:BKG+' (Sentinel-2)',
+  tiles:[`https://sgx.geodatenzentrum.de/wms_sentinel2_de?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=rgb&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/jpeg&TIME=${jahr}-01-01T00:00:00Z`]});
+const dem=()=>({type:'raster-dem',tiles:['dgm://{z}/{x}/{y}'],tileSize:256,encoding:'terrarium',minzoom:9,maxzoom:17,attribution:MV+' (DGM1)'});
+
+// ── Ebenen-Definition (unten → oben) ──────────────────────────────────
+// kind: raster = Kacheldienst · bild = UTM-Bild über das Gesamtgebiet · frame = projektiv entzerrtes Einzelbild
+//       hill / relief = aus dem DGM1 in MapLibre gerechnet
+const LAYERS=[
+  {id:'google',name:'Google Satellite',sub:'live',kind:'raster',on:false,op:1,sw:'#4285f4',
+   quelle:{type:'raster',tileSize:256,maxzoom:20,attribution:'© Google',tiles:[0,1,2,3].map(i=>`https://mt${i}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`)},
+   desc:'Aktuelle Satellitenbilder von Google. Werden live geladen. Aktualität regional unterschiedlich.'},
+  {id:'heute',name:'Luftbild heute',sub:'DOP M-V, 0.2 m/px, live',kind:'raster',on:true,op:1,sw:'#6a8f4e',quelle:mv('adv_dop','mv_dop',{maxzoom:19}),
+   desc:'Digitales Orthophoto des Landes M-V aus aktueller Befliegung, direkt vom Dienst des LAiV in voller Auflösung (0,2 m/px). Amtlich georeferenziert, Lagegenauigkeit besser als 0,5 m. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'s2_2024',name:'Sentinel-2 (2024)',sub:'BKG, 10 m/px',kind:'raster',on:false,op:1,sw:'#2e7d32',quelle:s2(2024),
+   desc:'ESA-Satellit Sentinel-2, Jahresmosaik 2024 des BKG. 10 m Bodenauflösung. Quelle: BKG (dl-de/by-2-0).'},
+  {id:'s2_2022',name:'Sentinel-2 (2022)',sub:'BKG, 10 m/px',kind:'raster',on:false,op:1,sw:'#388e3c',quelle:s2(2022),
+   desc:'Sentinel-2 Jahresmosaik 2022. 10 m Bodenauflösung. Quelle: BKG (dl-de/by-2-0).'},
+  {id:'s2_2020',name:'Sentinel-2 (2020)',sub:'BKG, 10 m/px',kind:'raster',on:false,op:1,sw:'#43a047',quelle:s2(2020),
+   desc:'Sentinel-2 Jahresmosaik 2020. 10 m Bodenauflösung. Quelle: BKG (dl-de/by-2-0).'},
+  {id:'s2_2018',name:'Sentinel-2 (2018)',sub:'BKG, 10 m/px',kind:'raster',on:false,op:1,sw:'#4caf50',quelle:s2(2018),
+   desc:'Sentinel-2 Jahresmosaik 2018 (frühestes verfügbares). 10 m Bodenauflösung. Quelle: BKG (dl-de/by-2-0).'},
+  {id:'osm',name:'basemap.de / OSM',sub:'BKG',kind:'raster',on:false,op:1,sw:'#7eb852',
+   quelle:{type:'raster',tileSize:256,maxzoom:18,attribution:'© basemap.de / BKG, OSM-Mitwirkende',tiles:['https://sgx.geodatenzentrum.de/wmts_basemapde/tile/1.0.0/de_basemapde_web_raster_farbe/default/GLOBAL_WEBMERCATOR/{z}/{y}/{x}.png']},
+   desc:'basemap.de des BKG, basierend auf amtlichen Daten und OpenStreetMap. Quelle: BKG / OSM-Mitwirkende (dl-de/by-2-0).'},
+  {id:'topo',name:'Topographische Karte',sub:'BKG TopPlusOpen',kind:'raster',on:false,op:1,sw:'#ff7043',
+   quelle:{type:'raster',tileSize:256,maxzoom:18,attribution:BKG+' TopPlusOpen',tiles:['https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/{z}/{y}/{x}.png']},
+   desc:'TopPlusOpen des BKG: topographische Karte aus amtlichen Geobasisdaten aller Bundesländer. Quelle: BKG (dl-de/by-2-0).'},
+  {id:'dtk25',name:'DTK25 aktuell',sub:'GeoBasis-DE/M-V',kind:'raster',on:false,op:1,sw:'#ff9800',quelle:mv('adv_dtk25','mv_dtk25',{maxzoom:16}),
+   desc:'Digitale Topographische Karte 1:25.000 des Landes M-V. Amtlich georeferenziert, aktueller Datenbestand. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'1991',name:'Luftbild 1991',sub:'DOP M-V, CIR-Infrarot',kind:'raster',on:false,op:1,sw:'#78909c',quelle:mv('dop1991_wms','mv_dop1991',{maxzoom:17}),
+   desc:'Historisches Orthophoto aus CIR-Infrarot-Befliegung 1990/91 (Falschfarben). Zeigt den Flugplatz kurz nach der Wende, noch mit militärischer Infrastruktur. Amtlich georeferenziert. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'1953',name:'Luftbild 1953',sub:'DOP M-V, s/w',kind:'raster',on:false,op:1,sw:'#9a9a92',quelle:mv('dop1953_wms','mv_dop1953',{maxzoom:17}),
+   desc:'Historisches Orthophoto aus Befliegung 1953, Schwarzweiß. Referenzbild für die Georeferenzierung der 1945er Aufnahmen (Bahnen und Rollwege noch identisch). Amtlich georeferenziert. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'lb440510',name:'Luftbild 10.05.1944',sub:'LAiV M-V, Vorschau',src:'luftbild_1944-05-10.webp',kind:'bild',on:false,op:1,adj:true,sw:'#6d4c41',
+   desc:'Luftaufklärung vom 10.05.1944 (Flug 44_080, Bilder 2027-2031 und 44_082 Bild 1027). Die Bilder zeigen den Norden und Osten des Gebiets, stark im Dunst. <b>Vorschau</b> (frei verfügbar, kein Vollscan), ca. 2 m/px. Gemeinsamer Blockausgleich aller Bilder; Nachbarbilder liegen meist 1-4 m auseinander, gegen DOP 1953 meist 3 m. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb440528',name:'Luftbild 28.05.1944',sub:'US 7GR 1619, LAiV M-V, Vorschau',src:'luftbild_1944-05-28.webp',kind:'bild',on:false,op:1,adj:true,sw:'#8d6e63',
+   desc:'Amerikanische Luftaufklärung vom 28.05.1944 (US 7th Photo Group, Sortie 1619), knapp ein Jahr vor dem Angriff vom 10.04.1945. Schon damals viele Bombentrichter um Hallen und Kanal. Mosaik aus 16 Bildern (Flug 44_186), <b>Vorschau</b> (frei verfügbar, kein Vollscan), ca. 1,8 m/px. Deckt rund 80 % des Gesamtgebiets, im Nordwesten fehlt ein Teil. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb440804',name:'Luftbild 04.08.1944',sub:'LAiV M-V, Vorschau, kleiner Maßstab',src:'luftbild_1944-08-04.webp',kind:'bild',on:false,op:1,adj:true,sw:'#795548',
+   desc:'Luftaufklärung vom 04.08.1944 (Flug 44_023, Bild 7005). Kleinmaßstäbige Übersichtsaufnahme, ein Bild deckt rund 14 km ab. <b>Vorschau</b>, nur ca. 9 m/px, für Details zu grob. 49 Passpunkte gegen DOP 1953. Lage etwa ±20 m. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb440913',name:'Luftbild 13.09.1944',sub:'LAiV M-V, Vorschau, kleiner Maßstab',src:'luftbild_1944-09-13.webp',kind:'bild',on:false,op:1,adj:true,sw:'#8d6e63',
+   desc:'Luftaufklärung vom 13.09.1944 (Flug 44_090, Bild 8016). Kleinmaßstäbige Übersichtsaufnahme; die SW-NO-Bahn ist im Bau. <b>Vorschau</b>, nur ca. 8 m/px, dunstig. 40 Passpunkte gegen DOP 1953. Lage etwa ±25 m. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb441224',name:'Luftbild 24.12.1944',sub:'LAiV M-V, Vorschau, kleiner Maßstab',src:'luftbild_1944-12-24.webp',kind:'bild',on:false,op:1,adj:true,sw:'#bcaaa4',
+   desc:'Luftaufklärung vom 24.12.1944 (Flug 44_009, Bild 7023). Kleinmaßstäbig, ein Bild deckt rund 10 km ab; die SW-NO-Bahn ist im Bau. <b>Vorschau</b>, ca. 7 m/px. 92 Passpunkte gegen DOP 1953. Lage etwa ±10 m. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb450408',name:'Luftbild 08.04.1945',sub:'RAF 106G/5234, LAiV M-V, Vorschau',src:'luftbild_1945-04-08.webp',kind:'bild',on:false,op:1,adj:true,sw:'#a1887f',
+   desc:'Britische Luftaufklärung vom 08.04.1945 (RAF 106G/5234), zwei Tage vor dem Angriff der 8th Air Force am 10.04.1945. Deckt das ganze Gebiet einschließlich Fusion-Gelände. Mosaik aus 42 Bildern (Flüge 45_011 und 45_012), <b>Vorschau</b>, ca. 1,7 m/px. Nachbarbilder liegen meist 1-3 m auseinander, gegen DOP 1953 meist 2-4 m. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'lb450411',name:'Luftbild 11.04.1945 (Vorschau)',sub:'US7/0094/C, LAiV M-V, Vorschau',src:'luftbild_1945-04-11.webp',kind:'bild',on:false,op:1,adj:true,sw:'#b39ddb',
+   desc:'Luftaufklärung vom 11.04.1945, ein Tag nach dem Angriff der 8th Air Force. Mosaik aus 23 Vorschaubildern (Flüge 45_149 und 45_150), deckt rund 88 % des Gesamtgebiets einschließlich Fusion-Gelände. Es ergänzt die drei hochaufgelösten Frames dort, wo diese nicht hinreichen. <b>Vorschau</b>, ca. 0,8 m/px. Quelle: © GeoBasis-DE/MV 2026, CC BY 4.0 (Quelle verändert).'},
+  {id:'3054',name:'11.04.1945 - Frame 3054',sub:'US7/0094/C, NCAP hochaufgelöst',src:'f3054.jpg',kind:'frame',on:false,op:.85,adj:true,sw:'#d070d0',
+   desc:'Luftaufklärung vom 11.04.1945 (einen Tag nach dem Angriff der 8th Air Force), Frame 3054. Georeferenziert per automatischer Bildkorrelation gegen DOP 1953 an 71 Passpunkten + Verknüpfungspunkte zu Frame 4071. Projektiv entzerrt (RANSAC). Restfehler 1,8 m, 0,195 m/px im Original. <b>Hochaufgelöster Vollscan</b> (NCAP, gekauft). Quelle: NCAP.'},
+  {id:'4071',name:'11.04.1945 - Frame 4071',sub:'US7/0094/C, NCAP hochaufgelöst',src:'f4071.jpg',kind:'frame',on:false,op:.85,adj:true,sw:'#e0b000',
+   desc:'Luftaufklärung vom 11.04.1945, Frame 4071 (zentrales Bild). 29 Passpunkte gegen DOP 1953 + Verknüpfungspunkte zu Frames 3054 und 4053. Projektiv entzerrt. Restfehler 2,9 m, 0,183 m/px. <b>Hochaufgelöster Vollscan</b> (NCAP, gekauft). Quelle: NCAP.'},
+  {id:'4053',name:'11.04.1945 - Frame 4053',sub:'US7/0094/C, NCAP hochaufgelöst',src:'f4053.jpg',kind:'frame',on:false,op:.85,adj:true,sw:'#30b070',
+   desc:'Luftaufklärung vom 11.04.1945, Frame 4053. 105 Passpunkte + 1.280 Verknüpfungspunkte zu Frame 4071. Projektiv entzerrt. Restfehler 2,5 m, 0,194 m/px. <b>Hochaufgelöster Vollscan</b> (NCAP, gekauft). Quelle: NCAP.'},
+  {id:'tk25ddr',name:'TK25 DDR-Ausgabe',sub:'1981-1987',kind:'raster',on:false,op:1,sw:'#b71c1c',quelle:mv('tk25as_laiv_wms','mv_tk25as',{maxzoom:16}),
+   desc:'Topographische Karte 1:25.000, DDR-Ausgabe (Ausgabe Staat), Aufnahmen 1981-1987. Zeigt den Flugplatz als militärisches Sperrgebiet der NVA/GSSD. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'tk25m',name:'Messtischblatt',sub:'1877-1943',kind:'raster',on:false,op:1,sw:'#5d4037',quelle:mv('tk25m_laiv_wms','mv_tk25m',{maxzoom:16}),
+   desc:'Preußische Landesaufnahme 1:25.000 (Messtischblatt). Erstausgabe 1877-1889, Nachträge bis 1943. Zeigt die Landschaft vor/während des Flugplatzbetriebs. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'dgmwms',name:'Schummerung (amtlich)',sub:'DGM, WMS des LAiV',kind:'raster',on:false,op:.7,sw:'#8d6e63',quelle:mv('dgm_wms','schummerung_NW',{png:true,maxzoom:17}),
+   desc:'Fertig gerechnete Schummerung des Landes aus dem Geländemodell (Beleuchtung aus Nordwest), wie im ursprünglichen Atlas. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'relief',name:'Höhenfarben',sub:'DGM1, in MapLibre gerechnet',kind:'relief',on:false,op:.8,sw:'#d9ef8b',
+   desc:'Höhenschichten direkt aus den Höhenwerten des DGM1, Farbskala auf das Gebiet abgestimmt (blau = tief, grün, gelb, rot = hoch). Macht im flachen Gelände Dämme, Gräben und Senken sichtbar. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'dgm',name:'Geländemodell',sub:'DGM1 Schummerung, in MapLibre gerechnet',kind:'hill',on:false,op:.7,sw:'#4e342e',
+   desc:'Schummerung, die MapLibre aus den Höhenwerten des DGM1 (Laserscanning, 1 m Raster) selbst rechnet. Der Regler steuert die Stärke. Dieselben Höhendaten tragen die 3D-Ansicht. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'},
+  {id:'alkis',name:'Flurstücke + Gebäude',sub:'ALKIS, live',kind:'raster',on:true,op:1,sw:'#e8d000',
+   quelle:mv('alkis_wms','adv_alkis_flurstuecke,adv_alkis_gebaeude',{styles:'Gelb,Gelb',png:true,maxzoom:19,minzoom:13}),
+   desc:'Amtliches Liegenschaftskataster (ALKIS): Flurstücksgrenzen und Gebäudegrundrisse, direkt vom Dienst des LAiV. Quelle: GeoBasis-DE/M-V (CC BY 4.0).'}
+];
+function restoreState(L){const s=store[L.id];if(s){L.on=s.on??L.on;L.op=s.op??L.op;L.a=s.a}L.a=L.a||{dx:0,dy:0,rot:0,sc:100};
+  if(L.kind==='frame'&&!L.f)L.f=D.frames[L.id]}
+function sortByStoredOrder(){const ord=store._order;if(!Array.isArray(ord))return;
+  const pos=new Map(LAYERS.map((L,i)=>[L.id,i]));
+  LAYERS.sort((a,b)=>{const ai=ord.indexOf(a.id),bi=ord.indexOf(b.id);return(ai===-1?999+pos.get(a.id):ai)-(bi===-1?999+pos.get(b.id):bi)})}
+LAYERS.forEach(restoreState);
+try{sortByStoredOrder()}catch(e){}
+
+// ── Karte ─────────────────────────────────────────────────────────────
+const view=document.getElementById('view');
+const sicht=store._view;
+const map=new maplibregl.Map({
+  container:'map',
+  style:{version:8,sources:{},layers:[{id:'bg',type:'background',paint:{'background-color':cssVar('--map')||'#c9cdc6'}}]},
+  center:sicht?.center||w2ll(1250,1150),zoom:sicht?.zoom??14.3,bearing:sicht?.bearing||0,pitch:sicht?.pitch||0,
+  minZoom:8,maxZoom:21,maxPitch:80,attributionControl:false,dragRotate:true,pitchWithRotate:true
+});
+map.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
+map.on('error',e=>{const m=e?.error?.message||'';if(m&&!/abort/i.test(m))console.warn('Karte:',m)});
+const OBEN='flug-rand';       // erste Ebene der Flugspuren/Annotationen: Kartenebenen liegen immer darunter
+let bereit=false;
+
+function ecken(L){
+  // Ecken des Bildes in Karten-Metern, mit der manuellen Anpassung, als [lng,lat] (oben links im Uhrzeigersinn)
+  const b=L.kind==='frame'?L._box:[GEB.x0,GEB.y0,GEB.x0+GEB.s,GEB.y0+GEB.s],a=L.a,[cx,cy]=centerOf(L);
+  const r=a.rot*Math.PI/180,c=Math.cos(r)*a.sc/100,s=Math.sin(r)*a.sc/100;
+  return[[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]]].map(([x,y])=>{const dx=x-cx,dy=y-cy;return w2ll(cx+a.dx+c*dx-s*dy,cy+a.dy+s*dx+c*dy)});
+}
+function centerOf(L){
+  if(L.kind==='frame'){const f=L.f;return applyH(f.H,f.w/2,f.h/2)}
+  return[1200,1200];
+}
+// Canvas kennt nur affine Transforms. Die Homographien sind projektiv, deshalb wird jedes Bild
+// in ein Gitter aus affinen Zellen zerlegt und einmalig in ein UTM-ausgerichtetes Canvas entzerrt.
+function drawFrameProjective(ctx,img,H,clip){
+  const x0=clip[0],y0=clip[1],x1=clip[2],y1=clip[3],cols=24,rows=24,pad=.75;
+  const dw=(x1-x0)/cols,dh=(y1-y0)/rows,iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+    const sx=x0+i*dw,sy=y0+j*dh;
+    const p00=applyH(H,sx,sy),p10=applyH(H,sx+dw,sy),p01=applyH(H,sx,sy+dh);
+    const a=(p10[0]-p00[0])/dw,b=(p10[1]-p00[1])/dw,c=(p01[0]-p00[0])/dh,d=(p01[1]-p00[1])/dh;
+    const e=p00[0]-a*sx-c*sy,f=p00[1]-b*sx-d*sy;
+    const ssx=Math.max(0,sx-pad),ssy=Math.max(0,sy-pad),sw=Math.min(iw,sx+dw+pad)-ssx,sh=Math.min(ih,sy+dh+pad)-ssy;
+    if(sw<=0||sh<=0)continue;
+    ctx.save();ctx.transform(a,b,c,d,e,f);ctx.drawImage(img,ssx,ssy,sw,sh,ssx,ssy,sw,sh);ctx.restore();
+  }
+}
+function ladeBild(src,fremd){return new Promise((ok,fehler)=>{const i=new Image();if(fremd)i.crossOrigin='anonymous';i.onload=()=>ok(i);i.onerror=()=>fehler(new Error('Bild nicht ladbar: '+src));i.src=src})}
+async function frameCanvas(L){
+  const f=L.f,c=f.clip;
+  // Die NCAP-Frames liegen nicht im Repository (fremdes Urheberrecht); fehlen sie lokal, kommen sie vom ursprünglichen Atlas
+  const img=L.src.startsWith('blob:')?await ladeBild(L.src):await ladeBild(BILDER+L.src+'?v='+BILDSTAND).catch(()=>ladeBild(ORIGINAL+L.src+'?v='+BILDSTAND,true));
+  const pts=(f.poly||[[c[0],c[1]],[c[2],c[1]],[c[2],c[3]],[c[0],c[3]]]).map(p=>applyH(f.H,p[0],p[1]));
+  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),box=[Math.min(...xs)-2,Math.min(...ys)-2,Math.max(...xs)+2,Math.max(...ys)+2];
+  const mpp=Math.sqrt(Math.abs(f.H[0][0]*f.H[1][1]-f.H[0][1]*f.H[1][0])),max=MOBIL()?2560:4096;
+  const k=Math.min(1/mpp,max/Math.max(box[2]-box[0],box[3]-box[1]));
+  const cv=document.createElement('canvas');cv.width=Math.round((box[2]-box[0])*k);cv.height=Math.round((box[3]-box[1])*k);
+  const ctx=cv.getContext('2d');ctx.setTransform(k,0,0,k,-box[0]*k,-box[1]*k);
+  if(f.poly){ctx.beginPath();pts.forEach(p=>ctx.lineTo(p[0],p[1]));ctx.closePath();ctx.clip()}
+  drawFrameProjective(ctx,img,f.H,c);
+  L._box=box;return cv;
+}
+const RELIEF=()=>{const s=DGM.meta.statistik,t=q=>s.p1+(s.p99-s.p1)*q;
+  return['interpolate',['linear'],['elevation'],s.min-1,'#1d4e89',s.p1,'#3f8fc4',t(.08),'#7fcdbb',t(.2),'#1a9850',t(.38),'#91cf60',t(.55),'#d9ef8b',t(.7),'#fee08b',t(.85),'#fc8d59',s.p99,'#d73027',s.max+1,'#ffffff']};
+
+// Quelle und Ebene erst anlegen, wenn die Ebene das erste Mal eingeschaltet wird
+function ensure(L){
+  if(L._da||L._kommt)return;
+  const id=L.id,sid='q_'+id;
+  try{
+    if(L.kind==='raster'){
+      map.addSource(sid,L.quelle);
+      map.addLayer({id,type:'raster',source:sid,paint:{'raster-opacity':L.op,'raster-fade-duration':150}},OBEN);L._da=true;
+    }else if(L.kind==='bild'){
+      map.addSource(sid,{type:'image',url:BILDER+L.src+'?v='+BILDSTAND,coordinates:ecken(L)});
+      map.addLayer({id,type:'raster',source:sid,paint:{'raster-opacity':L.op,'raster-fade-duration':0}},OBEN);L._da=true;
+    }else if(L.kind==='frame'){
+      L._kommt=true;
+      frameCanvas(L).then(cv=>{
+        map.addSource(sid,{type:'canvas',canvas:cv,coordinates:ecken(L),animate:false});
+        map.addLayer({id,type:'raster',source:sid,paint:{'raster-opacity':L.op,'raster-fade-duration':0}},OBEN);
+        L._da=true;L._kommt=false;applyLayer(L);syncOrder();
+      }).catch(e=>{L._kommt=false;toast(e.message)});
+    }else if(L.kind==='hill'){
+      map.addSource(sid,dem());
+      map.addLayer({id,type:'hillshade',source:sid,paint:{'hillshade-exaggeration':L.op,'hillshade-method':'multidirectional',
+        'hillshade-shadow-color':'#1b1410','hillshade-highlight-color':'#ffffff','hillshade-accent-color':'#3b2a20'}},OBEN);L._da=true;
+    }else if(L.kind==='relief'){
+      L._kommt=true;
+      DGM.bereit.then(()=>{
+        map.addSource(sid,dem());
+        map.addLayer({id,type:'color-relief',source:sid,paint:{'color-relief-color':RELIEF(),'color-relief-opacity':L.op}},OBEN);
+        L._da=true;L._kommt=false;applyLayer(L);syncOrder();
+      }).catch(e=>{L._kommt=false;toast('Geländemodell fehlt: '+e.message)});
+    }
+  }catch(e){console.error(e);toast('Ebene '+L.name+': '+e.message)}
+  if(L._da)syncOrder();
+}
+const OP={raster:'raster-opacity',bild:'raster-opacity',frame:'raster-opacity',hill:'hillshade-exaggeration',relief:'color-relief-opacity'};
+function applyLayer(L){
+  if(!bereit)return;
+  if(L.on)ensure(L);
+  if(!L._da)return;
+  map.setLayoutProperty(L.id,'visibility',L.on&&!(hHeld&&L.kind==='frame'&&!L.privat)?'visible':'none');
+  map.setPaintProperty(L.id,OP[L.kind],L.op);
+  if(L.adj)map.getSource('q_'+L.id)?.setCoordinates(ecken(L));
+}
+function syncOrder(){
+  if(!bereit)return;
+  LAYERS.forEach(L=>{if(L._da)map.moveLayer(L.id,OBEN)});
+}
+
+// ── Panel: Ebenen-Liste ───────────────────────────────────────────────
+const host=document.getElementById('layers');let selected=null;
+function persist(L){store[L.id]={on:L.on,op:L.op,a:L.a};save()}
+function rebuildLayerOrder(){syncOrder();LAYERS.slice().reverse().forEach(L=>host.appendChild(L.row))}
+function moveLayer(L,dir){
+  const i=LAYERS.indexOf(L),j=i+dir;
+  if(j<0||j>=LAYERS.length)return;
+  [LAYERS[i],LAYERS[j]]=[LAYERS[j],LAYERS[i]];
+  rebuildLayerOrder();persistOrder();toast(L.name+(dir>0?' nach oben':' nach unten'));
+}
+function persistOrder(){store._order=LAYERS.map(L=>L.id);save()}
+function makeRow(L){
+  const r=document.createElement('div');r.className='row';L.row=r;
+  const descId='desc_'+L.id;
+  r.innerHTML=`<input type="checkbox" id="cb_${L.id}" ${L.on?'checked':''}>
+   <label for="cb_${L.id}"><span class="nm"><span class="sw" style="background:${L.sw}"></span>${L.name}</span><span class="sub">${L.sub}</span></label>
+   <span class="acts">
+     ${L.adj?`<button class="adj" id="ad_${L.id}" aria-pressed="false" title="Position anpassen">Anpassen</button>`:''}
+     <button class="ibtn" data-info="${L.id}" title="Beschreibung ein-/ausblenden">i</button>
+     <span class="reord"><button data-up="${L.id}" title="Nach oben">&uarr;</button><button data-dn="${L.id}" title="Nach unten">&darr;</button></span>
+   </span>
+   <input type="range" id="op_${L.id}" min="0" max="1" step="0.05" value="${L.op}" aria-label="Deckkraft ${L.name}">
+   <div class="ldesc" id="${descId}" hidden>${L.desc||''}</div>`;
+  host.appendChild(r);
+  r.querySelector('input[type=checkbox]').onchange=e=>{L.on=e.target.checked;applyLayer(L);persist(L)};
+  r.querySelector('input[type=range]').oninput=e=>{L.op=+e.target.value;applyLayer(L);persist(L)};
+  if(L.adj)r.querySelector('.adj').onclick=()=>selectAdj(selected===L?null:L);
+  r.querySelector('[data-info]').onclick=()=>{const d=document.getElementById(descId);d.hidden=!d.hidden};
+  r.querySelector('[data-up]').onclick=()=>moveLayer(L,1);
+  r.querySelector('[data-dn]').onclick=()=>moveLayer(L,-1);
+}
+LAYERS.slice().reverse().forEach(makeRow);
+function syncRow(L){L.row.querySelector('input[type=checkbox]').checked=L.on;L.row.querySelector('input[type=range]').value=L.op}
+
+// ── Ebene anpassen ────────────────────────────────────────────────────
+const adjbox=document.getElementById('adjbox');
+const F=[['dx'],['dy'],['rot'],['sc']];
+function selectAdj(L){
+  selected=L;LAYERS.forEach(x=>{if(x.row){x.row.classList.toggle('sel',x===L);const b=x.row.querySelector('.adj');if(b)b.setAttribute('aria-pressed',x===L)}});
+  adjbox.hidden=!L;
+  if(L)map.keyboard.disable();else map.keyboard.enable();
+  if(!L){setDrag(false);return}
+  document.getElementById('adjtitle').textContent=L.name+' anpassen';
+  if(!L.on){L.on=true;syncRow(L);applyLayer(L);persist(L)}
+  syncAdj();
+}
+function syncAdj(){if(!selected)return;const a=selected.a;
+  for(const[k]of F){document.getElementById('r_'+k).value=k==='dy'?-a[k]:a[k];document.getElementById('n_'+k).value=+(k==='dy'?-a[k]:a[k]).toFixed(2)}}
+for(const[k]of F){
+  const set=v=>{if(!selected)return;v=+v;if(isNaN(v))return;selected.a[k]=k==='dy'?-v:v;applyLayer(selected);persist(selected);syncAdj()};
+  document.getElementById('r_'+k).oninput=e=>set(e.target.value);
+  document.getElementById('n_'+k).onchange=e=>set(e.target.value);
+}
+document.getElementById('adjreset').onclick=()=>{if(!selected)return;selected.a={dx:0,dy:0,rot:0,sc:100};applyLayer(selected);persist(selected);syncAdj();toast('Ebene zurückgesetzt')};
+document.getElementById('adjdone').onclick=()=>selectAdj(null);
+let dragLayer=false,dragVon=null;const dm=document.getElementById('dragmode');
+function setDrag(v){dragLayer=v;dm.setAttribute('aria-pressed',v);view.classList.toggle('movelayer',v)}
+dm.onclick=()=>setDrag(!dragLayer);
+function dragStart(e){if(!(dragLayer&&selected))return;if(e.points&&e.points.length>1)return;e.preventDefault();dragVon=ll2w(e.lngLat)}
+function dragMove(e){if(!dragVon||!selected)return;const w=ll2w(e.lngLat);selected.a.dx+=w.x-dragVon.x;selected.a.dy+=w.y-dragVon.y;dragVon=w;applyLayer(selected);syncAdj()}
+function dragEnd(){if(dragVon&&selected)persist(selected);dragVon=null}
+map.on('mousedown',dragStart);map.on('touchstart',dragStart);
+map.on('touchmove',dragMove);map.on('mouseup',dragEnd);map.on('touchend',dragEnd);
+
+// ── Navigation, Maßstab, Koordinaten ─────────────────────────────────
+function zentriere(cx,cy,span,dauer=600){
+  const p=[w2ll(cx-span/2,cy-span/2),w2ll(cx+span/2,cy-span/2),w2ll(cx+span/2,cy+span/2),w2ll(cx-span/2,cy+span/2)];
+  const lon=p.map(q=>q[0]),lat=p.map(q=>q[1]);
+  map.fitBounds([[Math.min(...lon),Math.min(...lat)],[Math.max(...lon),Math.max(...lat)]],{padding:0,duration:dauer,bearing:map.getBearing(),pitch:map.getPitch()});
+}
+function home(dauer){zentriere(1250,1150,900,dauer)}
+document.getElementById('zin').onclick=()=>map.zoomIn();
+document.getElementById('zout').onclick=()=>map.zoomOut();
+document.getElementById('zhome').onclick=()=>home();
+document.getElementById('zall').onclick=()=>zentriere(1400,500,3000);
+document.getElementById('zfusion').onclick=()=>zentriere(1150,150,1500);
+document.getElementById('znorth').onclick=()=>map.easeTo({bearing:0,duration:400});
+function renderHud(){
+  const mpp=40075016.686*Math.cos(map.getCenter().lat*Math.PI/180)/(512*2**map.getZoom());
+  const target=view.clientWidth/6*mpp,nice=[1,2,5,10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000];let m=nice[0];for(const n of nice)if(n<=target)m=n;
+  document.getElementById('scalebar').style.width=(m/mpp)+'px';document.getElementById('scalelbl').textContent=m>=1000?(m/1000)+' km':m+' m';
+  document.querySelector('#znorth span').style.transform=`rotate(${-map.getBearing()}deg)`;
+}
+map.on('move',renderHud);
+map.on('moveend',()=>{const c=map.getCenter();store._view={center:[c.lng,c.lat],zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()};save()});
+const fmtH=h=>Number.isFinite(h)?h.toFixed(1).replace('.',',')+' m':'–';
+map.on('mousemove',e=>{
+  const u=llToUTM33(e.lngLat.lat,e.lngLat.lng);
+  document.getElementById('coord').innerHTML=
+    `E ${u.e.toFixed(1)} &middot; N ${u.n.toFixed(1)} &middot; H ${fmtH(dgmHoehe(u.e,u.n))}<small>${e.lngLat.lat.toFixed(5)}&deg;N &nbsp;${e.lngLat.lng.toFixed(5)}&deg;E</small>`;
+  if(dragVon){dragMove(e);return}
+  if(tool==='measure'&&curMeasure.length>0){const w=ll2w(e.lngLat);mouseWorld=[w.x,w.y];renderAnnotations()}
+});
+
+// ── 3D-Gelände ────────────────────────────────────────────────────────
+let d3=!!store._d3,exag=store._exag||1;
+const exagIn=document.getElementById('d3_exag');
+function apply3D(kippen){
+  document.getElementById('t_3d').classList.toggle('on',d3);document.getElementById('d3_toggle').setAttribute('aria-pressed',d3);
+  exagIn.value=exag;document.getElementById('d3_exag_o').innerHTML=String(exag).replace('.',',')+'&times;';
+  if(!bereit)return;
+  if(d3){
+    if(!map.getSource('dgm-gelaende'))map.addSource('dgm-gelaende',dem());
+    map.setTerrain({source:'dgm-gelaende',exaggeration:exag});
+    map.setSky({'sky-color':'#8fb8de','horizon-color':'#e4ecef','fog-color':'#e4ecef','sky-horizon-blend':.6,'horizon-fog-blend':.7,'fog-ground-blend':.4,'atmosphere-blend':0});
+    if(kippen&&map.getPitch()<20)map.easeTo({pitch:62,duration:900});
+  }else{
+    map.setTerrain(null);
+    if(kippen)map.easeTo({pitch:0,duration:600});
+  }
+  flBaue();
+}
+function set3D(v){d3=v;store._d3=d3;save();apply3D(true);toast(d3?'3D-Gelände ein – rechte Maustaste dreht und neigt':'3D-Gelände aus')}
+document.getElementById('t_3d').onclick=()=>set3D(!d3);
+document.getElementById('d3_toggle').onclick=()=>set3D(!d3);
+document.getElementById('d3_reset').onclick=()=>map.easeTo({pitch:0,bearing:0,duration:500});
+exagIn.oninput=()=>{exag=+exagIn.value;store._exag=exag;save();apply3D(false)};
+DGM.bereit.then(m=>{document.getElementById('d3_range').textContent=Math.round(m.statistik.min)+'–'+Math.round(m.statistik.max)})
+  .catch(()=>toast('Geländemodell fehlt – bitte tools/daten_laden.py ausführen'));
+
+// ── Flugspuren (ADS-B, FLARM) ────────────────────────────────────────────────
+// Tagesdateien aus tools/flugdaten_laden.py (ADS-B-Archiv), tools/flugdaten_sammeln.py (ADS-B laufend, adsb.lol)
+// und tools/flugdaten_flarm.py (FLARM laufend, Open Glider Network).
+// 2D: Linie je Abschnitt, eingefärbt. 3D: MapLibre kann Linien nicht anheben, darum je Abschnitt ein schmales
+// Band als fill-extrusion auf Flughöhe über Grund, darunter ein durchscheinender Vorhang bis zum Boden.
+const FL={on:store._flug?.on??true,tag:store._flug?.tag||null,farbe:store._flug?.farbe||'hoehe',grenze:store._flug?.grenze??3000,index:[],daten:null,lauf:0};
+// Höhenfilter: Ein Flug bleibt, wenn er im Umkreis irgendwann unter der Grenze (m über NHN) oder am Boden war.
+// Verkehrsflugzeuge im Reiseflug (9–12 km) fallen so heraus, An- und Abflüge am Platz bleiben.
+function flSichtbar(f){
+  if(!FL.grenze)return true;
+  let hat=false;
+  for(const p of f.punkte){if(p[4])return true;if(p[3]!=null){hat=true;if(p[3]<=FL.grenze)return true}}
+  return!hat;
+}
+const FL_STUFEN=[[0,[255,23,68]],[150,[255,145,0]],[300,[255,234,0]],[600,[0,230,118]],[1200,[0,176,255]],[3000,[213,0,249]]];
+const FL_PALETTE=['#ff1744','#00b0ff','#ffea00','#00e676','#d500f9','#ff9100','#1de9b6','#f50057','#c6ff00','#7c4dff','#ffffff','#ff6e40'];
+const FL_BODEN='#b0bec5',FL_HALB=4,FL_DICKE=6,FL_LUECKE=90;
+function flFarbeHoehe(agl){
+  if(agl==null)return FL_BODEN;
+  for(let i=1;i<FL_STUFEN.length;i++)if(agl<=FL_STUFEN[i][0]){
+    const[a,ca]=FL_STUFEN[i-1],[b,cb]=FL_STUFEN[i],t=(agl-a)/(b-a);
+    return'rgb('+ca.map((v,k)=>Math.round(v+(cb[k]-v)*t)).join(',')+')';
+  }
+  return'rgb('+FL_STUFEN[FL_STUFEN.length-1][1].join(',')+')';
+}
+const flFarbeFlz=hex=>{let s=0;for(const c of hex)s=(s*31+c.charCodeAt(0))>>>0;return FL_PALETTE[s%FL_PALETTE.length]};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uhr=t=>new Date(t*1000).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+const flName=f=>f.reg||f.ruf||f.hex.toUpperCase();
+document.querySelector('#fl_legende .verlauf').style.background='linear-gradient(90deg,'+FL_STUFEN.map(s=>'rgb('+s[1].join(',')+')').join(',')+')';
+function flMerke(){store._flug={on:FL.on,tag:FL.tag,farbe:FL.farbe,grenze:FL.grenze};save()}
+async function flIndex(){
+  // Je Quelle gibt es eine Datei (ADS-B: <Datum>.json, FLARM: <Datum>-flarm.json); hier je Tag zusammenfassen
+  let roh=[];try{const r=await fetch('flugdaten/index.json',{cache:'no-cache'});if(!r.ok)throw 0;roh=(await r.json()).tage||[]}catch(e){}
+  const tage=new Map();
+  for(const t of roh){const g=tage.get(t.datum)||{datum:t.datum,fluege:0,dateien:[]};g.fluege+=t.fluege;g.dateien.push(...(t.dateien||[t.datei]));tage.set(t.datum,g)}
+  FL.index=[...tage.values()].sort((a,b)=>a.datum<b.datum?-1:1);
+  const sel=document.getElementById('fl_tag');
+  sel.innerHTML=FL.index.slice().reverse().map(t=>`<option value="${esc(t.datum)}">${esc(t.datum.split('-').reverse().join('.'))} · ${t.fluege} Flüge</option>`).join('');
+  if(!FL.index.some(t=>t.datum===FL.tag))FL.tag=FL.index.length?FL.index[FL.index.length-1].datum:null;
+  sel.value=FL.tag||'';sel.hidden=!FL.index.length;
+}
+async function flLade(){
+  const lauf=++FL.lauf,tag=FL.index.find(t=>t.datum===FL.tag);
+  let d=null;
+  for(const datei of tag?tag.dateien:[])try{
+    const r=await fetch('flugdaten/'+datei,{cache:'no-cache'});if(!r.ok)continue;
+    const x=await r.json();x.fluege.forEach(f=>{f.netz=f.netz||'ADS-B'});
+    if(d){d.fluege.push(...x.fluege);d.radius_km=Math.max(d.radius_km,x.radius_km)}else d=x;
+  }catch(e){}
+  if(d)d.fluege.sort((a,b)=>a.punkte[0][0]-b.punkte[0][0]);
+  if(lauf!==FL.lauf)return;
+  FL.daten=d;await flBaue();flListe();
+}
+async function flBaue(){
+  if(!bereit||!map.getSource('flug'))return;
+  document.getElementById('fl_toggle').setAttribute('aria-pressed',FL.on);
+  document.getElementById('fl_legende').hidden=FL.farbe!=='hoehe';
+  const lin=[],band=[];
+  if(FL.on&&FL.daten){
+    try{await DGM.bereit;await dgmGrob()}catch(e){}
+    const med=DGM.meta?.statistik.median??66;
+    FL.daten.fluege.forEach((f,fi)=>{
+      if(!flSichtbar(f))return;
+      const fz=flFarbeFlz(f.hex);let hLetzt=null;
+      const P=f.punkte.map(p=>{
+        const w=ll2w([p[1],p[2]]),g=dgmHoehe(348600+w.x,5909100-w.y);let h=p[4]?null:(p[3]??hLetzt);if(h!=null)hLetzt=h;
+        return{t:p[0],ll:[p[1],p[2]],w,h,agl:p[4]?0:(h==null?null:Math.max(0,h-(Number.isFinite(g)?g:med))),gs:p[5],hq:p[6],boden:p[4]};
+      });
+      for(let i=1;i<P.length;i++){
+        const a=P[i-1],b=P[i];if(b.t-a.t>FL_LUECKE)continue;
+        const agl=a.agl!=null&&b.agl!=null?(a.agl+b.agl)/2:(a.agl??b.agl);
+        const farbe=FL.farbe==='flz'?fz:flFarbeHoehe(agl);
+        lin.push({type:'Feature',properties:{farbe,fi,t:b.t,h:b.h,agl:b.agl,gs:b.gs,hq:b.hq,boden:b.boden},geometry:{type:'LineString',coordinates:[a.ll,b.ll]}});
+        const dx=b.w.x-a.w.x,dy=b.w.y-a.w.y,l=Math.hypot(dx,dy);
+        if(agl==null||agl<3||l<.5)continue;
+        const nx=-dy/l*FL_HALB,ny=dx/l*FL_HALB,top=agl*exag;
+        band.push({type:'Feature',properties:{farbe,top,basis:Math.max(0,top-FL_DICKE*exag)},geometry:{type:'Polygon',coordinates:[[
+          w2ll(a.w.x+nx,a.w.y+ny),w2ll(b.w.x+nx,b.w.y+ny),w2ll(b.w.x-nx,b.w.y-ny),w2ll(a.w.x-nx,a.w.y-ny),w2ll(a.w.x+nx,a.w.y+ny)]]}});
+      }
+    });
+  }
+  map.getSource('flug').setData({type:'FeatureCollection',features:lin});
+  map.getSource('flug-band').setData({type:'FeatureCollection',features:band});
+  for(const id of['flug-vorhang','flug-band'])map.setLayoutProperty(id,'visibility',d3?'visible':'none');
+  // In 3D liegt die Linie als Bodenspur unter dem Band, darum dort zurückhaltender
+  map.setPaintProperty('flug-linie','line-opacity',d3?.55:1);map.setPaintProperty('flug-rand','line-opacity',d3?.25:.6);
+}
+function flListe(){
+  const info=document.getElementById('fl_info'),liste=document.getElementById('fl_liste');liste.innerHTML='';
+  if(!FL.index.length){info.innerHTML='Noch keine Flugdaten vorhanden. Vergangenen Tag holen: <code>python tools/flugdaten_laden.py JJJJ-MM-TT</code>, laufend aufzeichnen: <code>python tools/flugdaten_sammeln.py</code>.';return}
+  const d=FL.daten;if(!d){info.textContent='Tagesdatei nicht lesbar.';return}
+  const da=d.fluege.filter(flSichtbar),n=new Set(da.map(f=>f.hex)).size,weg=d.fluege.length-da.length;
+  info.innerHTML=`${da.length} Flüge von ${n} Flugzeugen im Umkreis von ${String(d.radius_km).replace('.',',')} km (Tag nach UTC)${weg?`, ${weg} höhere Überflüge ausgeblendet`:''}. Nur Flugzeuge mit ADS-B oder FLARM, soweit von Empfängern erfasst. Klick auf eine Spur zeigt Details. Quellen: <a href="https://www.adsb.lol" target="_blank" rel="noopener">adsb.lol</a>, <a href="https://www.glidernet.org" target="_blank" rel="noopener">Open Glider Network</a> (ODbL; FLARM-Daten nach 24 h nicht weitergeben).`;
+  d.fluege.forEach((f,fi)=>{
+    if(!flSichtbar(f))return;
+    const b=document.createElement('button');b.className='flrow';
+    const hs=f.punkte.map(p=>p[3]).filter(h=>h!=null),p0=f.punkte[0],p1=f.punkte[f.punkte.length-1];
+    b.innerHTML=`<i style="background:${flFarbeFlz(f.hex)}"></i><span>${uhr(p0[0])}–${uhr(p1[0])}</span><span>${esc(flName(f))}${f.typ?' · '+esc(f.typ):''}${f.netz!=='ADS-B'?' · '+esc(f.netz):''}</span><span>${hs.length?'bis '+Math.round(Math.max(...hs))+' m':'Boden'}</span>`;
+    b.title=[f.netz,f.art,f.ruf&&'Rufzeichen '+f.ruf,'Adresse '+f.hex,f.empf?.length&&'empfangen über '+f.empf.join(', ')].filter(Boolean).join(' · ');
+    b.onclick=()=>{
+      const lon=f.punkte.map(p=>p[1]),lat=f.punkte.map(p=>p[2]);
+      if(!FL.on){FL.on=true;flMerke();flBaue()}
+      map.fitBounds([[Math.min(...lon),Math.min(...lat)],[Math.max(...lon),Math.max(...lat)]],{padding:60,maxZoom:16,duration:600,bearing:map.getBearing(),pitch:map.getPitch()});
+    };
+    liste.appendChild(b);
+  });
+}
+document.getElementById('fl_toggle').onclick=()=>{FL.on=!FL.on;flMerke();flBaue();toast(FL.on?'Flugspuren ein':'Flugspuren aus')};
+document.getElementById('fl_tag').onchange=e=>{FL.tag=e.target.value;flMerke();flLade()};
+document.getElementById('fl_farbe').onchange=e=>{FL.farbe=e.target.value;flMerke();flBaue()};
+document.getElementById('fl_farbe').value=FL.farbe;
+document.getElementById('fl_filter').value=String(FL.grenze);
+document.getElementById('fl_filter').onchange=e=>{FL.grenze=+e.target.value;flMerke();flBaue();flListe()};
+let flPopup=null;
+function flKlick(e){
+  if(tool!=='pan'||dragLayer||!FL.daten)return;
+  const p=e.features[0].properties,f=FL.daten.fluege[p.fi];if(!f)return;
+  const zeile=[];
+  if(p.boden)zeile.push('am Boden');
+  else if(p.h!=null)zeile.push(`${Math.round(p.h)} m NHN (${Math.round(p.h/0.3048)} ft)${p.agl!=null?' · '+Math.round(p.agl)+' m über Grund':''}${p.hq==='b'?' · Druckhöhe':''}`);
+  if(p.gs!=null)zeile.push(`${Math.round(p.gs)} kt (${Math.round(p.gs*1.852)} km/h)`);
+  flPopup?.remove();
+  flPopup=new maplibregl.Popup({closeButton:false,maxWidth:'260px'}).setLngLat(e.lngLat).setHTML(
+    `<b>${esc(flName(f))}</b>${f.ruf&&f.ruf!==flName(f)?' · '+esc(f.ruf):''}<br>${esc([f.typ,f.art].filter(Boolean).join(' · ')||'Typ unbekannt')}<br>${uhr(p.t)} Uhr · ${zeile.join('<br>')}<br>${esc(f.netz)}${f.empf?.length?' über '+esc(f.empf.join(', ')):''}`).addTo(map);
+}
+// Läuft der Sammler, wächst die Datei des heutigen Tages (UTC): alle 30 s nachsehen
+setInterval(async()=>{
+  if(!bereit||document.hidden)return;
+  const heute=new Date().toISOString().slice(0,10),alt=FL.tag,hatte=FL.index.some(t=>t.datum===heute);
+  if(!FL.on&&hatte)return;
+  await flIndex();
+  if(FL.tag===heute||FL.tag!==alt||(!hatte&&FL.index.some(t=>t.datum===heute)))flLade();
+},30000);
+
+// ── Tastatur ──────────────────────────────────────────────────────────
+const frames45=()=>LAYERS.filter(L=>L.kind==='frame'&&!L.privat);let hHeld=false;
+window.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea'))return;
+  if(e.key==='h'||e.key==='H'){if(!hHeld){hHeld=true;frames45().forEach(applyLayer)}}
+  if(e.key==='m')setTool(tool==='measure'?'pan':'measure');
+  if(e.key==='p')setTool(tool==='mark'?'pan':'mark');
+  if(e.key==='d')set3D(!d3);
+  if(e.key==='Escape'){if(tool!=='pan'){if(tool==='measure'&&curMeasure.length>0){curMeasure=[];renderAnnotations()}setTool('pan')}else if(selected)selectAdj(null)}
+  if(selected&&e.key.startsWith('Arrow')){const s=e.shiftKey?10:1;const a=selected.a;
+    if(e.key==='ArrowLeft')a.dx-=s;if(e.key==='ArrowRight')a.dx+=s;if(e.key==='ArrowUp')a.dy-=s;if(e.key==='ArrowDown')a.dy+=s;
+    e.preventDefault();applyLayer(selected);persist(selected);syncAdj()}
+});
+window.addEventListener('keyup',e=>{if(e.key==='h'||e.key==='H'){hHeld=false;frames45().forEach(applyLayer)}});
+
+// ── Werkzeuge: Messen & Markieren ─────────────────────────────────────
+// Punkte liegen wie im ursprünglichen Atlas in Karten-Metern (UTM), Strecken sind UTM-Strecken.
+let tool='pan';
+let measures=[],curMeasure=[],markers=[];
+let mouseWorld=null;
+try{const sa=store._anno;if(sa){measures=sa.m||[];markers=sa.k||[]}}catch(e){}
+function setTool(t){
+  if(tool==='measure'&&curMeasure.length>=2)finishMeasure();
+  if(tool==='measure'&&curMeasure.length>0){curMeasure=[];renderAnnotations()}
+  tool=t;
+  view.classList.toggle('tool-active',t!=='pan');
+  if(t==='pan')map.doubleClickZoom.enable();else map.doubleClickZoom.disable();
+  document.getElementById('t_measure').classList.toggle('on',t==='measure');
+  document.getElementById('t_mark').classList.toggle('on',t==='mark');
+  if(t==='measure')toast('Klicken um Messpunkte zu setzen. Doppelklick beendet.');
+  if(t==='mark')toast('Klicken um Marker zu setzen.');
+}
+function addMeasurePoint(wx,wy){
+  const l=curMeasure[curMeasure.length-1];
+  if(l&&Math.hypot(l[0]-wx,l[1]-wy)<.05)return;       // zweiter Klick eines Doppelklicks
+  curMeasure.push([wx,wy]);renderAnnotations()}
+function finishMeasure(){if(curMeasure.length>=2){measures.push(curMeasure)}curMeasure=[];mouseWorld=null;persistAnno();renderAnnotations()}
+function addMarker(wx,wy){markers.push([wx,wy]);persistAnno();renderAnnotations()}
+function persistAnno(){store._anno={m:measures,k:markers};save()}
+map.on('click',e=>{
+  if(tool==='pan'||dragLayer)return;
+  const w=ll2w(e.lngLat);
+  if(tool==='measure')addMeasurePoint(w.x,w.y);
+  if(tool==='mark')addMarker(w.x,w.y);
+});
+map.on('dblclick',e=>{if(tool==='measure'&&curMeasure.length>=2){e.preventDefault();finishMeasure()}});
+
+let labels=[];
+const fmtM=d=>(d<100?d.toFixed(1):String(Math.round(d)))+' m';
+function label(x,y,text,color,cls,anchor){
+  const el=document.createElement('div');el.className='lbl '+(cls||'');el.style.color=color;el.textContent=text;
+  labels.push(new maplibregl.Marker({element:el,anchor:anchor||'bottom',offset:anchor==='left'?[9,0]:[0,-5]}).setLngLat(w2ll(x,y)).addTo(map));
+}
+function kreis(x,y,r){const p=[];for(let i=0;i<=48;i++){const t=i/48*2*Math.PI;p.push(w2ll(x+r*Math.cos(t),y+r*Math.sin(t)))}return p}
+function renderAnnotations(){
+  if(!bereit)return;
+  labels.forEach(l=>l.remove());labels=[];
+  const linien=[],punkte=[];
+  function linie(pts,color,preview){
+    let total=0;const alle=preview&&mouseWorld?[...pts,mouseWorld]:pts;
+    pts.forEach(([x,y],i)=>{
+      punkte.push({type:'Feature',properties:{color,r:4,rand:'#000'},geometry:{type:'Point',coordinates:w2ll(x,y)}});
+      if(i>0){const[px,py]=pts[i-1],d=Math.hypot(x-px,y-py);total+=d;label((x+px)/2,(y+py)/2,fmtM(d),color)}
+    });
+    if(alle.length>=2)linien.push({type:'Feature',properties:{color},geometry:{type:'LineString',coordinates:alle.map(p=>w2ll(p[0],p[1]))}});
+    if(preview&&mouseWorld&&pts.length){const lp=pts[pts.length-1];total+=Math.hypot(mouseWorld[0]-lp[0],mouseWorld[1]-lp[1])}
+    if(alle.length>=2){const lp=alle[alle.length-1];label(lp[0],lp[1],fmtM(total),color,'sum','left')}
+  }
+  measures.forEach(m=>linie(m,'#ffdd00',false));
+  if(curMeasure.length>0)linie(curMeasure,'#00ddff',true);
+  markers.forEach(([mx,my])=>{
+    const e=348600+mx,n=5909100-my,h=dgmHoehe(e,n);
+    punkte.push({type:'Feature',properties:{color:'#ff3366',r:6,rand:'#fff'},geometry:{type:'Point',coordinates:w2ll(mx,my)}});
+    label(mx,my,`${e.toFixed(0)} / ${n.toFixed(0)}`+(Number.isFinite(h)?` · ${fmtH(h)}`:''),'#ff3366','mono','left');
+  });
+  const acc=[];
+  if(gpsPos){
+    acc.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[kreis(gpsPos.x,gpsPos.y,gpsAcc||10)]}});
+    punkte.push({type:'Feature',properties:{color:'#4285f4',r:7,rand:'#fff'},geometry:{type:'Point',coordinates:w2ll(gpsPos.x,gpsPos.y)}});
+  }
+  map.getSource('anno-acc').setData({type:'FeatureCollection',features:acc});
+  map.getSource('anno-linien').setData({type:'FeatureCollection',features:linien});
+  map.getSource('anno-punkte').setData({type:'FeatureCollection',features:punkte});
+}
+document.getElementById('t_measure').onclick=()=>setTool(tool==='measure'?'pan':'measure');
+document.getElementById('t_mark').onclick=()=>setTool(tool==='mark'?'pan':'mark');
+document.getElementById('t_clear').onclick=()=>{measures=[];curMeasure=[];markers=[];mouseWorld=null;persistAnno();renderAnnotations();setTool('pan');toast('Alle Messungen und Marker entfernt')};
+
+// ── Presets ───────────────────────────────────────────────────────────
+const allOff=Object.fromEntries(LAYERS.map(L=>[L.id,[0]]));
+const f45={...allOff,'3054':[1,.85],'4071':[1,.85],'4053':[1,.85]};
+const PRE={
+ 'heute':   {...allOff,heute:[1,1],alkis:[1,1]},
+ 'topo':    {...allOff,topo:[1,1],alkis:[1,.6]},
+ 'google':  {...allOff,google:[1,1],alkis:[1,.7]},
+ '1945':    {...f45,heute:[1,1]},
+ '1945alk': {...f45,heute:[1,1],alkis:[1,.8]},
+ '1953':    {...allOff,'1953':[1,1],'3054':[1,.6],'4071':[1,.6],'4053':[1,.6]},
+ '1944':    {...allOff,heute:[1,1],lb440528:[1,.85]},
+ 'vornach': {...f45,lb450408:[1,1]},
+ '1991':    {...allOff,'1991':[1,1],'3054':[1,.5],'4071':[1,.5],'4053':[1,.5]},
+ '1991h':   {...allOff,heute:[1,1],'1991':[1,.6]},
+ 'ddr':     {...allOff,tk25ddr:[1,1],'3054':[1,.6],'4071':[1,.6],'4053':[1,.6]},
+ 'messtisch':  {...allOff,tk25m:[1,1],'3054':[1,.65],'4071':[1,.65],'4053':[1,.65]},
+ 'messtischh': {...allOff,heute:[1,1],tk25m:[1,.5]},
+ 'relief':  {...allOff,dgmwms:[1,1],dgm:[1,.6],'3054':[1,.6],'4071':[1,.6],'4053':[1,.6]},
+ 'reliefh': {...allOff,heute:[1,1],dgmwms:[1,.55],dgm:[1,.6]},
+ 'hoehen':  {...allOff,relief:[1,1],dgm:[1,1],alkis:[1,.5]},
+ 'alle1945':{...f45,heute:[1,1],'1953':[1,.3],alkis:[1,.5],dgm:[1,.5]}
+};
+// Interne Ebenen kommen in keinem Preset vor und werden ausgeschaltet
+function applyPreset(p){
+  LAYERS.forEach(L=>{const v=p[L.id]||(L.privat?[0]:null);if(!v)return;L.on=!!v[0];if(v[1]!=null)L.op=v[1];applyLayer(L);persist(L);syncRow(L)});
+}
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{applyPreset(PRE[b.dataset.preset]);toast(b.textContent)});
+
+// ── Bild-Export ───────────────────────────────────────────────────────
+// Die WebGL-Zeichenfläche ist nur direkt nach dem Zeichnen lesbar, darum im render-Ereignis kopieren.
+function exportImage(fmt){
+  map.once('render',()=>{
+    const src=map.getCanvas(),c=document.createElement('canvas');c.width=src.width;c.height=src.height;
+    const ctx=c.getContext('2d'),k=src.width/src.clientWidth,rahmen=src.getBoundingClientRect();
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(src,0,0);
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+    for(const l of labels){
+      const el=l.getElement(),r=el.getBoundingClientRect(),st=getComputedStyle(el);
+      ctx.font=`${st.fontWeight} ${parseFloat(st.fontSize)*k}px ${st.fontFamily}`;
+      const x=(r.left+r.width/2-rahmen.left)*k,y=(r.top+r.height/2-rahmen.top)*k;
+      ctx.lineWidth=3*k;ctx.strokeStyle='#000';ctx.strokeText(el.textContent,x,y);ctx.fillStyle=st.color;ctx.fillText(el.textContent,x,y);
+    }
+    try{
+      c.toBlob(blob=>{
+        if(!blob){toast('Export fehlgeschlagen');return}
+        const a=document.createElement('a');a.download=`luftbildatlas_laerz.${fmt}`;a.href=URL.createObjectURL(blob);a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('Export gespeichert');
+      },fmt==='jpg'?'image/jpeg':'image/png',0.95);
+    }catch(e){toast('Export nicht möglich: '+e.message)}
+  });
+  map.triggerRepaint();
+}
+document.getElementById('exp_png').onclick=()=>exportImage('png');
+document.getElementById('exp_jpg').onclick=()=>exportImage('jpg');
+
+// ── Sitzung speichern / laden ─────────────────────────────────────────
+function buildSession(){
+  const layers={};
+  LAYERS.forEach((L,i)=>{
+    layers[L.id]={on:L.on,op:L.op,order:i};
+    const a=L.a;
+    if(a.dx||a.dy||a.rot||a.sc!==100)
+      layers[L.id].adj={dx:+a.dx.toFixed(2),dy:+a.dy.toFixed(2),rot:+a.rot.toFixed(2),sc:+a.sc.toFixed(1)};
+  });
+  const c=map.getCenter();
+  return{
+    _info:'Luftbildatlas Lärz (MapLibre) – Sitzungsdatei. Enthält Ebenen-Einstellungen, Messungen und Marker. Kann über "Sitzung aus JSON laden" wiederhergestellt werden.',
+    version:3,
+    datum:new Date().toISOString(),
+    ansicht:{center:[c.lng,c.lat],zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch(),d3,ueberhoehung:exag},
+    ebenen:layers,
+    messungen:measures,
+    marker:markers
+  };
+}
+function applySession(s){
+  if(!s||!s.version){toast('Ungültige Sitzungsdatei');return}
+  if(s.ebenen){
+    for(const L of LAYERS){
+      const e=s.ebenen[L.id];if(!e)continue;
+      if(e.on!==undefined)L.on=e.on;
+      if(e.op!==undefined)L.op=e.op;
+      if(e.adj&&L.adj){L.a={dx:e.adj.dx||0,dy:e.adj.dy||0,rot:e.adj.rot||0,sc:e.adj.sc||100}}
+      syncRow(L);applyLayer(L);persist(L);
+    }
+    const ordered=Object.entries(s.ebenen).filter(([,v])=>v.order!==undefined).sort((a,b)=>a[1].order-b[1].order);
+    if(ordered.length>0){store._order=ordered.map(([id])=>id);sortByStoredOrder();rebuildLayerOrder();persistOrder()}
+  }
+  if(Array.isArray(s.messungen))measures=s.messungen;
+  if(Array.isArray(s.marker))markers=s.marker;
+  persistAnno();
+  const a=s.ansicht;
+  if(a&&Array.isArray(a.center)&&Number.isFinite(a.zoom)){     // Ansichten des alten Atlas (zoom/tx/ty) sind nicht übertragbar
+    if(typeof a.d3==='boolean'){d3=a.d3;store._d3=d3}
+    if(Number.isFinite(a.ueberhoehung)){exag=a.ueberhoehung;store._exag=exag}
+    save();apply3D(false);
+    map.jumpTo({center:a.center,zoom:a.zoom,bearing:a.bearing||0,pitch:a.pitch||0});
+  }
+  syncAdj();renderAnnotations();
+  toast('Sitzung geladen ('+new Date(s.datum).toLocaleDateString('de')+')');
+}
+document.getElementById('sess_save').onclick=()=>{
+  const blob=new Blob([JSON.stringify(buildSession(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.download=`luftbildatlas_laerz_${new Date().toISOString().slice(0,10)}.json`;
+  a.href=URL.createObjectURL(blob);a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('Sitzung gespeichert');
+};
+const sessFile=document.getElementById('sess_file');
+document.getElementById('sess_load').onclick=()=>sessFile.click();
+sessFile.onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{try{applySession(JSON.parse(ev.target.result))}catch(err){toast('Fehler beim Laden: '+err.message)}};
+  reader.readAsText(f);sessFile.value='';
+};
+document.getElementById('export').onclick=()=>{const o={};LAYERS.filter(L=>L.adj).forEach(L=>{const a=L.a;if(a.dx||a.dy||a.rot||a.sc!==100)o[L.id]={ost_m:+a.dx.toFixed(2),nord_m:+(-a.dy).toFixed(2),drehung_grad:a.rot,massstab_proz:a.sc}});
+  const box=document.getElementById('exportbox');box.value=Object.keys(o).length?JSON.stringify(o,null,1):'Keine Anpassungen.';box.hidden=false;
+  navigator.clipboard?.writeText(box.value).then(()=>toast('In die Zwischenablage kopiert'),()=>{box.select();toast('Text markiert, bitte kopieren')})};
+document.getElementById('resetall').onclick=()=>{LAYERS.forEach(L=>{L.a={dx:0,dy:0,rot:0,sc:100};applyLayer(L);persist(L)});syncAdj();toast('Verschiebungen zurückgesetzt')};
+document.getElementById('resetfull').onclick=()=>{
+  if(!confirm('Alle Einstellungen, Messungen und Marker auf Werkseinstellung zurücksetzen?'))return;
+  try{localStorage.removeItem(LS)}catch(e){}
+  location.reload();
+};
+
+// ── GPS-Standort ──────────────────────────────────────────────────────
+let gpsWatch=null,gpsPos=null,gpsAcc=null,gpsCentered=false;
+function toggleGPS(){
+  const btn=document.getElementById('t_gps');
+  if(gpsWatch!==null){
+    navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;gpsPos=null;gpsAcc=null;gpsCentered=false;
+    btn.classList.remove('on');renderAnnotations();toast('GPS deaktiviert');return;
+  }
+  if(!navigator.geolocation){toast('GPS nicht verfügbar');return}
+  btn.classList.add('on');toast('Suche GPS-Signal...');
+  gpsWatch=navigator.geolocation.watchPosition(
+    pos=>{
+      gpsPos=ll2w([pos.coords.longitude,pos.coords.latitude]);
+      gpsAcc=pos.coords.accuracy||10;
+      renderAnnotations();
+      if(!gpsCentered){gpsCentered=true;map.easeTo({center:w2ll(gpsPos.x,gpsPos.y),duration:500});toast(`GPS: ${gpsAcc.toFixed(0)} m Genauigkeit`)}
+    },
+    err=>{
+      if(gpsWatch!==null)navigator.geolocation.clearWatch(gpsWatch);
+      gpsWatch=null;gpsPos=null;gpsAcc=null;gpsCentered=false;
+      btn.classList.remove('on');renderAnnotations();
+      toast('GPS-Fehler: '+(err.code===1?'Zugriff verweigert':err.code===2?'Nicht verfügbar':'Timeout'));
+    },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
+}
+document.getElementById('t_gps').onclick=()=>{
+  if(gpsWatch!==null&&gpsPos){
+    const ziel=map.project(w2ll(gpsPos.x,gpsPos.y)),mitte=map.project(map.getCenter());
+    if(Math.hypot(ziel.x-mitte.x,ziel.y-mitte.y)<3){toggleGPS();return}     // schon zentriert → ausschalten
+    map.easeTo({center:w2ll(gpsPos.x,gpsPos.y),duration:400});
+  }else toggleGPS();
+};
+
+// ── Mobil: Panel auf-/zuklappen ───────────────────────────────────────
+const panel=document.querySelector('.panel');
+if(MOBIL())panel.classList.add('collapsed');
+document.querySelector('.phead').addEventListener('click',e=>{
+  if(!MOBIL())return;
+  if(e.target.closest('.mob-reset'))return;
+  panel.classList.toggle('collapsed');
+});
+document.getElementById('mob_reset').onclick=e=>{
+  e.stopPropagation();
+  applyPreset(PRE['heute']);home();
+  panel.classList.add('collapsed');
+  toast('Heute + Grundstücke');
+};
+
+// ── Airpark intern (verschlüsselte Ebenen) ────────────────────────────
+// Verschlüsselt mit skripte/verschluesseln.py des ursprünglichen Atlas (PBKDF2 → AES-256-GCM, je Datei 12 Byte IV + Chiffrat).
+// Der Bereich erscheint nur mit ?airparkinternal in der Adresse oder wenn auf dem Gerät ein Schlüssel gemerkt ist.
+// Dateien werden zuerst lokal gesucht, sonst beim ursprünglichen Atlas geholt.
+const PRIV='airparkinternal/',PKEY='laerz-atlas-airparkinternal';
+const privSec=document.getElementById('privsec');
+let privIdx=null;
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64e=u=>btoa(String.fromCharCode(...new Uint8Array(u)));
+async function privFetch(datei,opt){
+  try{const r=await fetch(PRIV+datei,opt);if(r.ok)return r}catch(e){}
+  const r=await fetch(ORIGINAL+PRIV+datei,opt);if(!r.ok)throw new Error(datei+': HTTP '+r.status);return r;
+}
+function privDecrypt(key,buf){const u=new Uint8Array(buf);return crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},key,u.slice(12))}
+async function privDeriveKey(pw){
+  const k=privIdx.kdf;
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',hash:k.hash,salt:b64d(k.salt),iterations:k.iter},base,{name:'AES-GCM',length:256},true,['decrypt']);
+}
+async function privUnlock(key){
+  // Wirft bei falschem Schlüssel (GCM-Authentifizierung schlägt fehl)
+  const man=JSON.parse(new TextDecoder().decode(await privDecrypt(key,b64d(privIdx.manifest))));
+  const alkis=LAYERS.findIndex(L=>L.id==='alkis');
+  for(const e of man.ebenen){
+    if(LAYERS.some(L=>L.id===e.id))continue;
+    const res=await privFetch(e.datei);
+    const blob=new Blob([await privDecrypt(key,await res.arrayBuffer())],{type:e.mime});
+    const L={id:e.id,name:e.name,sub:e.sub,desc:e.desc,kind:'frame',src:URL.createObjectURL(blob),
+      f:{w:e.w,h:e.h,H:e.H,clip:e.clip,poly:e.maske},on:false,op:e.op,adj:true,sw:e.sw,privat:true};
+    restoreState(L);
+    LAYERS.splice(alkis<0?LAYERS.length:alkis,0,L);  // unter ALKIS einordnen
+    makeRow(L);applyLayer(L);
+  }
+  try{sortByStoredOrder()}catch(e){}
+  rebuildLayerOrder();
+  return man.ebenen.length;
+}
+function privShowUnlocked(n){
+  document.getElementById('privform').hidden=true;document.getElementById('privok').hidden=false;
+  document.getElementById('privinfo').textContent=n===1?'1 Ebene entsperrt (in der Ebenenliste oben)':n+' Ebenen entsperrt (in der Ebenenliste oben)';
+}
+async function privInit(){
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(PKEY)||'null')}catch(e){}
+  if(!saved&&!new URLSearchParams(location.search).has('airparkinternal'))return;
+  if(!window.crypto?.subtle)return;
+  try{privIdx=await(await privFetch('index.json',{cache:'no-cache'})).json()}catch(e){return}
+  privSec.hidden=false;
+  if(saved&&saved.salt===privIdx.kdf.salt){
+    try{const key=await crypto.subtle.importKey('raw',b64d(saved.key),'AES-GCM',false,['decrypt']);
+      privShowUnlocked(await privUnlock(key));return}catch(e){}
+  }
+  if(saved)try{localStorage.removeItem(PKEY)}catch(e){}
+}
+document.getElementById('privform').onsubmit=async e=>{
+  e.preventDefault();if(!privIdx)return;
+  const pw=document.getElementById('privpw').value;if(!pw)return;
+  toast('Entschlüssele …');
+  let key;
+  try{key=await privDeriveKey(pw);await privDecrypt(key,b64d(privIdx.manifest))}
+  catch(err){toast('Falsches Passwort');return}
+  try{
+    const n=await privUnlock(key);
+    if(document.getElementById('privmerk').checked)
+      try{localStorage.setItem(PKEY,JSON.stringify({salt:privIdx.kdf.salt,key:b64e(await crypto.subtle.exportKey('raw',key))}))}catch(e){}
+    document.getElementById('privpw').value='';
+    privShowUnlocked(n);toast(n+' interne Ebene(n) geladen');
+  }catch(err){toast('Fehler beim Laden: '+err.message)}
+};
+document.getElementById('privlock').onclick=()=>{
+  try{localStorage.removeItem(PKEY)}catch(e){}
+  location.reload();
+};
+
+// ── Toast & Start ─────────────────────────────────────────────────────
+let tt;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2400)}
+map.on('load',()=>{
+  const leer={type:'FeatureCollection',features:[]};
+  map.addSource('anno-acc',{type:'geojson',data:leer});
+  map.addSource('anno-linien',{type:'geojson',data:leer});
+  map.addSource('anno-punkte',{type:'geojson',data:leer});
+  map.addSource('flug',{type:'geojson',data:leer,attribution:'Flugspuren © <a href="https://www.adsb.lol" target="_blank" rel="noopener">adsb.lol</a>, <a href="https://www.glidernet.org" target="_blank" rel="noopener">OGN</a> (ODbL)'});
+  map.addSource('flug-band',{type:'geojson',data:leer});
+  map.addLayer({id:'flug-rand',type:'line',source:'flug',layout:{'line-cap':'round'},paint:{'line-color':'#000','line-width':4.5,'line-opacity':.6}});
+  map.addLayer({id:'flug-linie',type:'line',source:'flug',layout:{'line-cap':'round'},paint:{'line-color':['get','farbe'],'line-width':2.4}});
+  map.addLayer({id:'flug-klick',type:'line',source:'flug',paint:{'line-color':'#000','line-width':16,'line-opacity':.01}});
+  map.addLayer({id:'flug-vorhang',type:'fill-extrusion',source:'flug-band',layout:{visibility:'none'},
+    paint:{'fill-extrusion-color':['get','farbe'],'fill-extrusion-base':0,'fill-extrusion-height':['get','basis'],'fill-extrusion-opacity':.22,'fill-extrusion-vertical-gradient':false}});
+  map.addLayer({id:'flug-band',type:'fill-extrusion',source:'flug-band',layout:{visibility:'none'},
+    paint:{'fill-extrusion-color':['get','farbe'],'fill-extrusion-base':['get','basis'],'fill-extrusion-height':['get','top'],'fill-extrusion-opacity':.95,'fill-extrusion-vertical-gradient':false}});
+  map.on('click','flug-klick',flKlick);
+  map.on('mouseenter','flug-klick',()=>{if(tool==='pan'&&!dragLayer)map.getCanvas().style.cursor='pointer'});
+  map.on('mouseleave','flug-klick',()=>{map.getCanvas().style.cursor=''});
+  map.addLayer({id:'anno-acc',type:'fill',source:'anno-acc',paint:{'fill-color':'rgba(66,133,244,0.15)','fill-outline-color':'rgba(66,133,244,0.5)'}});
+  map.addLayer({id:'anno-linien-rand',type:'line',source:'anno-linien',paint:{'line-color':'#000','line-width':3.5,'line-opacity':.55}});
+  map.addLayer({id:'anno-linien',type:'line',source:'anno-linien',paint:{'line-color':['get','color'],'line-width':1.8,'line-dasharray':[3,2]}});
+  map.addLayer({id:'anno-punkte',type:'circle',source:'anno-punkte',paint:{'circle-radius':['get','r'],'circle-color':['get','color'],'circle-stroke-color':['get','rand'],'circle-stroke-width':1.5}});
+  bereit=true;
+  LAYERS.forEach(applyLayer);
+  apply3D(false);
+  if(!sicht)home(0);
+  renderHud();renderAnnotations();
+  flIndex().then(flLade);
+  privInit();
+});
+apply3D(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+ "quelle": "© GeoBasis-DE/M-V, DGM1 und DGM25 (WCS dgm_wcs), CC BY 4.0",
+ "kodierung": {
+  "offset_m": 100.0,
+  "skala": 100.0
+ },
+ "fein": {
+  "e0": 348200,
+  "n1": 5910500,
+  "res": 1,
+  "breite": 3800,
+  "hoehe": 3800,
+  "kacheln": 4,
+  "kachel_px": 950,
+  "muster": "fein_{sp}_{ze}.png"
+ },
+ "umland": {
+  "e0": 326000,
+  "n1": 5932000,
+  "res": 25,
+  "breite": 1920,
+  "hoehe": 1840,
+  "datei": "umland.png"
+ },
+ "statistik": {
+  "min": 59.969818115234375,
+  "max": 85.22699737548828,
+  "p1": 61.77192687988281,
+  "median": 66.82609558105469,
+  "p99": 78.9280014038086
+ }
+}

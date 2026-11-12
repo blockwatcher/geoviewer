@@ -1,0 +1,8 @@
+# NCAP-Scans (gekauft, Urheberrecht NCAP) – werden mit tools/daten_laden.py --bilder lokal geholt
+bilder/f*.jpg
+# FLARM-Aufzeichnungen: OGN-Daten älter als 24 h dürfen nicht weitergegeben werden
+flugdaten/*-flarm.json
+# verschlüsselter Bereich des ursprünglichen Atlas
+airparkinternal/
+__pycache__/
+*.tmp
