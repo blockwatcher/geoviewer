@@ -46,6 +46,8 @@ python tools/gebaeude_laden.py                 # LoD2-Gebäude des Landes für d
 - **Schutzgebiete:** live vom Dienst `ng_schutzgebiete` des LUNG M-V (CC BY-SA): Landschafts- und
   Naturschutzgebiete, FFH- und Vogelschutzgebiete, Nationalpark, Naturparke, Wildnisgebiete, Flächennaturdenkmale.
   Ein Klick nennt Gebiet, Kategorie, Jahr und Fläche.
+- **Wasserschutzgebiete:** live vom Dienst `wg_schutzgebiete` des LUNG M-V (CC BY-SA), mit Schutzzonen und
+  Überschwemmungsgebieten. Das Wasserschutzgebiet Lärz liegt gut einen Kilometer vom Platz.
 
 ## Flugplatz und Geschichte aus OpenStreetMap
 

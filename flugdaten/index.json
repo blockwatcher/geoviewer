@@ -71,6 +71,18 @@
    "fluege": 1,
    "flugzeuge": 1,
    "datei": "2026-11-12.json"
+  },
+  {
+   "datum": "2026-11-13",
+   "fluege": 6,
+   "flugzeuge": 5,
+   "datei": "2026-11-13.json"
+  },
+  {
+   "datum": "2026-11-14",
+   "fluege": 10,
+   "flugzeuge": 10,
+   "datei": "2026-11-14.json"
   }
  ]
 }
